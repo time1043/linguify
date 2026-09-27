@@ -8,16 +8,35 @@ export interface SelectionContext {
 }
 
 export type CardStatus = 'pending' | 'found' | 'missing' | 'error';
+export type AddState = 'idle' | 'adding' | 'added' | 'exists' | 'error';
 
 interface CardProps {
   selection: SelectionContext;
   status: CardStatus;
   hit: LookupHit | null;
+  addState: AddState;
+  onAdd: () => void;
 }
 
 const CARD_GAP = 8;
 
-export default function Card({ selection, status, hit }: CardProps) {
+const ADD_LABELS: Record<AddState, string> = {
+  idle: '加入月度',
+  adding: '添加中…',
+  added: '✓ 已加入',
+  exists: '已在月度中',
+  error: '添加失败，重试',
+};
+
+const ADD_CLASSES: Record<AddState, string> = {
+  idle: 'bg-indigo-600 text-white hover:bg-indigo-500',
+  adding: 'bg-indigo-300 text-white',
+  added: 'bg-green-100 text-green-700',
+  exists: 'bg-zinc-100 text-zinc-500',
+  error: 'bg-red-100 text-red-700 hover:bg-red-200',
+};
+
+export default function Card({ selection, status, hit, addState, onAdd }: CardProps) {
   const { rect } = selection;
   // Prefer below the selection; flip above when near the viewport bottom.
   const flip = window.innerHeight - rect.bottom < 200;
@@ -72,6 +91,16 @@ export default function Card({ selection, status, hit }: CardProps) {
             )}
           </>
         )}
+        <div className="mt-3 flex items-center justify-end">
+          <button
+            type="button"
+            disabled={addState === 'adding'}
+            onClick={onAdd}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${ADD_CLASSES[addState]}`}
+          >
+            {ADD_LABELS[addState]}
+          </button>
+        </div>
       </div>
     </div>
   );

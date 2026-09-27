@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { LookupHit, LookupResponse } from '@/lib/types';
+import type { AddWordResponse, LookupHit, LookupResponse } from '@/lib/types';
 
 import { normalizeWord } from '@/lib/vocab';
 
-import Card, { type CardStatus, type SelectionContext } from './Card';
+import Card, { type AddState, type CardStatus, type SelectionContext } from './Card';
 
 interface State {
   selection: SelectionContext;
@@ -43,7 +43,11 @@ function getSelectionContext(): SelectionContext | null {
   if (!word) return null;
   const node = selection.anchorNode;
   const element = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
-  if (!element || element.closest('input, textarea, select') || (element as HTMLElement).isContentEditable)
+  if (
+    !element ||
+    element.closest('input, textarea, select') ||
+    (element as HTMLElement).isContentEditable
+  )
     return null;
   const rect = selection.getRangeAt(0).getBoundingClientRect();
   return {
@@ -56,11 +60,13 @@ function getSelectionContext(): SelectionContext | null {
 
 export default function App() {
   const [state, setState] = useState<State | null>(null);
+  const [addState, setAddState] = useState<AddState>('idle');
   const requestId = useRef(0);
 
   const lookup = useCallback(async (selection: SelectionContext) => {
     const id = ++requestId.current;
     setState({ selection, status: 'pending', hit: null });
+    setAddState('idle');
     try {
       const response = (await browser.runtime.sendMessage({
         type: 'lookup',
@@ -78,6 +84,22 @@ export default function App() {
       if (id === requestId.current) setState({ selection, status: 'error', hit: null });
     }
   }, []);
+
+  const addWord = useCallback(async () => {
+    if (!state || addState === 'adding') return;
+    setAddState('adding');
+    try {
+      const response = (await browser.runtime.sendMessage({
+        type: 'addWord',
+        word: state.selection.word,
+        example: { sentence: state.selection.sentence, url: state.selection.url },
+      })) as AddWordResponse;
+      if (response?.error) setAddState('error');
+      else setAddState(response?.added ? 'added' : 'exists');
+    } catch {
+      setAddState('error');
+    }
+  }, [state, addState]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -105,5 +127,13 @@ export default function App() {
     };
   }, [lookup]);
 
-  return state ? <Card selection={state.selection} status={state.status} hit={state.hit} /> : null;
+  return state ? (
+    <Card
+      selection={state.selection}
+      status={state.status}
+      hit={state.hit}
+      addState={addState}
+      onAdd={() => void addWord()}
+    />
+  ) : null;
 }
