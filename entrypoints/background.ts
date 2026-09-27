@@ -80,28 +80,20 @@ export default defineBackground(() => {
             word: string;
             example: { sentence: string; url: string };
           };
-          // Enrich the entry from the buckets when the word is known; the
-          // write itself works even when the buckets cannot be read.
-          let ipa = '';
-          let meaning = '';
-          let forms: string[] = [];
+          // Record where the word was found, e.g. "free-nmet/2050.json#970".
+          // Provenance is best-effort; the write works without it too.
+          let from: string | null = null;
           try {
             const hit = lookupWord(await getVocabIndex({ allowStale: true }), word);
-            if (hit) {
-              ipa = hit.entry.ipa;
-              meaning = hit.entry.meaning;
-              forms = hit.entry.forms;
-            }
+            if (hit) from = `${hit.bucket.path}#${hit.entry.position}`;
           } catch {
-            // Enrichment is best-effort.
+            // Provenance is best-effort.
           }
           const dir = await getBucketDir();
           if (!dir) throw new VocabAccessError('NO_DIR');
           const result = await appendMonthly(dir, {
             word: normalizeWord(word) ?? word,
-            ipa,
-            meaning,
-            forms,
+            from,
             example,
           });
           return {

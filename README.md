@@ -18,7 +18,8 @@ File System Access API.
 - `entrypoints/options/` — pick the vocabulary-bucket directory, re-grant
   file access, re-read stats.
 - `lib/vocab.ts` — pure lookup index (headwords + first token of each form).
-- `lib/monthly.ts` — pure monthly-file merge logic (dedupe, position).
+- `lib/monthly.ts` — pure monthly-file merge logic (dedupe, position, `from`
+  provenance).
 - `lib/fsa.ts` — File System Access layer (directory pick, permission,
   bucket reading, monthly writing).
 
@@ -36,7 +37,7 @@ select `.output/chrome-mv3`.
 
 1. Click the extension icon → 打开设置.
 2. 选择词库文件夹 → pick the vocabulary-bucket repo root (the folder that
-   contains `data/`). `monthly/` is created at the same level.
+   contains `data/`). User-generated data is written to `user/vocab-monthly/`.
 3. When the browser offers 「每次访问时允许」 in the permission prompt, choose
    it so access survives restarts; otherwise use 重新授权 after a restart.
 
@@ -45,8 +46,9 @@ select `.output/chrome-mv3`.
 1. Select a word on any page — a small dot appears at its top-left corner.
    Hovering the dot speaks the word and opens the card with the bucket, its
    position, the word, ipa, meaning and forms; unmatched words show 没查到.
-2. Click 加入月度 — the word is appended to `monthly/YYYY-MM.json` with an
-   `example: { sentence, url }`; duplicates are skipped.
+2. Click 加入月度 — the word is appended to `user/vocab-monthly/YYYY-MM.json`
+   with `from` (dictionary provenance, e.g. `free-nmet/2050.json#970`, null
+   when not found) and `example: { sentence, url }`; duplicates are skipped.
 
 ## Development
 

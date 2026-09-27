@@ -1,18 +1,23 @@
 // Pure monthly-file merge logic. No extension or file-system APIs here so it
 // runs under plain Node for smoke tests.
 
-import type { WordEntry } from './types';
+export interface MonthlyEntry {
+  position: number;
+  word: string;
+  // Provenance of the word, e.g. "free-nmet/2050.json#970" (bucket file and
+  // the entry's position in it); null when the word is not in any bucket.
+  from: string | null;
+  example: { sentence: string; url: string };
+}
 
 export interface MonthlyDoc {
   name: string;
-  words: WordEntry[];
+  words: MonthlyEntry[];
 }
 
 export interface AddWordInput {
   word: string;
-  ipa?: string;
-  meaning?: string;
-  forms?: string[];
+  from: string | null;
   example: { sentence: string; url: string };
 }
 
@@ -27,7 +32,7 @@ export function appendWord(
   doc: MonthlyDoc | null,
   input: AddWordInput,
   today = new Date(),
-): { doc: MonthlyDoc; added: boolean; entry?: WordEntry } {
+): { doc: MonthlyDoc; added: boolean; entry?: MonthlyEntry } {
   const base = doc ?? { name: monthKey(today), words: [] };
   const word = input.word.trim();
   const exists = base.words.some(
@@ -39,12 +44,10 @@ export function appendWord(
   if (exists || !word) return { doc: base, added: false };
 
   const position = base.words.reduce((max, w) => Math.max(max, Number(w?.position) || 0), 0) + 1;
-  const entry: WordEntry = {
+  const entry: MonthlyEntry = {
     position,
     word,
-    ipa: input.ipa ?? '',
-    meaning: input.meaning ?? '',
-    forms: input.forms ?? [],
+    from: input.from,
     example: {
       sentence: input.example?.sentence ?? '',
       url: input.example?.url ?? '',
