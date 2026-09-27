@@ -48,7 +48,8 @@ export default function App() {
           </button>
         )}
         <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-          选择 vocabulary-bucket 仓库根目录（包含 data/ 文件夹）；monthly/ 会创建在同一层。
+          选择 vocabulary-bucket 仓库根目录（包含 data/ 文件夹）；用户生成数据会写入
+          user/vocab-monthly/。
           浏览器重启后如果查询提示未授权，回到这里点一下「重新授权」即可；若授权弹窗提供
           「每次访问时允许」，选它就一劳永逸。
         </p>
@@ -84,8 +85,8 @@ export default function App() {
           在任意网页选中一个单词，其左上角会出现一个小圆点；鼠标移上去会朗读单词并显示词本、位置、音标、释义和变形。
         </p>
         <p className="mt-1">
-          2. 点卡片上的「加入月度」，单词连同例句和网页地址会被写入词库目录的
-          monthly/YYYY-MM.json；重复添加会自动跳过。
+          2. 点卡片上的「加入月度」，单词连同例句、网址和出处（如 free-nmet/2050.json#970）会被写入
+          user/vocab-monthly/YYYY-MM.json；重复添加会自动跳过。
         </p>
       </section>
     </div>

@@ -76,8 +76,8 @@ async function* jsonFiles(
 ): AsyncGenerator<{ handle: FileSystemFileHandle; path: string }> {
   for await (const entry of (dir as IterableDirectoryHandle).values()) {
     if (entry.kind === 'directory') {
-      // Monthly outputs and repo noise are never vocab buckets.
-      if (['monthly', 'node_modules', '.git'].includes(entry.name)) continue;
+      // User-generated data and repo noise are never vocab buckets.
+      if (['user', 'monthly', 'node_modules', '.git'].includes(entry.name)) continue;
       yield* jsonFiles(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`);
     } else if (entry.name.endsWith('.json')) {
       yield { handle: entry as FileSystemFileHandle, path: `${prefix}${entry.name}` };
@@ -96,7 +96,7 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
     try {
       const doc = JSON.parse(await (await handle.getFile()).text());
       if (Array.isArray(doc?.words))
-        buckets.push({ name: String(doc.name ?? path), words: doc.words });
+        buckets.push({ path, name: String(doc.name ?? path), words: doc.words });
     } catch (err) {
       console.warn(`skip unreadable bucket ${path}:`, err);
     }
@@ -104,15 +104,17 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
   return buckets.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Append one word to monthly/YYYY-MM.json next to the bucket data.
+// Append one word to user/vocab-monthly/YYYY-MM.json. The user/ directory
+// holds user-generated data, mirroring data/ for dictionary data.
 export async function appendMonthly(
   dir: BucketDirHandle,
   input: AddWordInput,
   today = new Date(),
 ): Promise<{ added: boolean; file: string }> {
   const ym = monthKey(today);
-  const monthly = await dir.getDirectoryHandle('monthly', { create: true });
-  const file = await monthly.getFileHandle(`${ym}.json`, { create: true });
+  const userDir = await dir.getDirectoryHandle('user', { create: true });
+  const monthlyDir = await userDir.getDirectoryHandle('vocab-monthly', { create: true });
+  const file = await monthlyDir.getFileHandle(`${ym}.json`, { create: true });
 
   let doc: MonthlyDoc | null = null;
   try {
@@ -126,5 +128,5 @@ export async function appendMonthly(
     await writable.write(serializeMonthlyDoc(result.doc));
     await writable.close();
   }
-  return { added: result.added, file: `monthly/${ym}.json` };
+  return { added: result.added, file: `user/vocab-monthly/${ym}.json` };
 }

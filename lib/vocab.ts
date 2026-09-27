@@ -25,7 +25,7 @@ export function buildVocabIndex(buckets: Bucket[]): VocabIndex {
   for (const bucket of buckets) {
     for (const entry of bucket.words) {
       words += 1;
-      const hit: LookupHit = { bucket: bucket.name, entry };
+      const hit: LookupHit = { bucket, entry };
       const key = entry.word.trim().toLowerCase();
       if (key && !byWord.has(key)) byWord.set(key, hit);
       for (const form of entry.forms ?? []) {

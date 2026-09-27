@@ -97,7 +97,7 @@ export default function Card({
           <>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                {hit.bucket}
+                {hit.bucket.name}
               </span>
               <span className="text-xs text-zinc-400" title="在词本中的位置">
                 #{hit.entry.position}
