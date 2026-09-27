@@ -4,10 +4,28 @@
 
 import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
 
-import { VocabAccessError, appendMonthly, getBucketDir, readBuckets } from '@/lib/fsa';
+import { VocabAccessError, getBucketDir, readBuckets } from '@/lib/fsa';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
+
+// The service worker has no createWritable(), so monthly-file writes are
+// delegated to an offscreen document (entrypoints/offscreen).
+interface OffscreenApi {
+  hasDocument(): Promise<boolean>;
+  createDocument(options: { url: string; reasons: string[]; justification: string }): Promise<void>;
+}
+
+async function ensureOffscreenDocument(): Promise<void> {
+  const offscreen = (browser as unknown as { offscreen?: OffscreenApi }).offscreen;
+  if (!offscreen) throw new Error('chrome.offscreen API unavailable');
+  if (await offscreen.hasDocument()) return;
+  await offscreen.createDocument({
+    url: browser.runtime.getURL('/offscreen.html'),
+    reasons: ['BLOBS'],
+    justification: 'Write monthly vocabulary files via the File System Access API',
+  });
+}
 
 interface VocabCache {
   index: VocabIndex;
@@ -89,18 +107,15 @@ export default defineBackground(() => {
           } catch {
             // Provenance is best-effort.
           }
-          const dir = await getBucketDir();
-          if (!dir) throw new VocabAccessError('NO_DIR');
-          const result = await appendMonthly(dir, {
+          await ensureOffscreenDocument();
+          const result = (await browser.runtime.sendMessage({
+            type: 'writeMonthly',
             word: normalizeWord(word) ?? word,
             from,
             example,
-          });
-          return {
-            ok: true,
-            added: result.added,
-            reason: result.added ? undefined : 'exists',
-          } satisfies AddWordResponse;
+          })) as AddWordResponse | undefined;
+          if (!result) throw new Error('offscreen write did not respond');
+          return result;
         } catch (err) {
           return { ok: false, error: errorCode(err) } satisfies AddWordResponse;
         }
