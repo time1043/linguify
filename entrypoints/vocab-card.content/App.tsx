@@ -28,6 +28,15 @@ function describeError(error?: string): string {
 
 const SELECTION_DEBOUNCE_MS = 200;
 const SENTENCE_MAX_LENGTH = 300;
+const CARD_GAP = 8;
+
+// Prefer below the selection; flip above when near the viewport bottom.
+function cardPosition(rect: SelectionContext['rect']): React.CSSProperties {
+  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 328);
+  return window.innerHeight - rect.bottom < 200
+    ? { left, bottom: window.innerHeight - rect.top + CARD_GAP }
+    : { left, top: rect.bottom + CARD_GAP };
+}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -156,14 +165,16 @@ export default function App() {
   }, [lookup]);
 
   return state ? (
-    <Card
-      selection={state.selection}
-      status={state.status}
-      hit={state.hit}
-      errorText={state.errorText}
-      addState={addState}
-      onAdd={() => void addWord()}
-      onSpeak={() => speakWord(state.selection.word)}
-    />
+    <div className="fixed z-[2147483647] font-sans" style={cardPosition(state.selection.rect)}>
+      <Card
+        selection={state.selection}
+        status={state.status}
+        hit={state.hit}
+        errorText={state.errorText}
+        addState={addState}
+        onAdd={() => void addWord()}
+        onSpeak={() => speakWord(state.selection.word)}
+      />
+    </div>
   ) : null;
 }
