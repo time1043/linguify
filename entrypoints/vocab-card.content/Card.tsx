@@ -16,6 +16,7 @@ interface CardProps {
   hit: LookupHit | null;
   errorText: string;
   addState: AddState;
+  addError: string;
   onAdd: () => void;
   onSpeak: () => void;
 }
@@ -76,6 +77,7 @@ export default function Card({
   hit,
   errorText,
   addState,
+  addError,
   onAdd,
   onSpeak,
 }: CardProps) {
@@ -130,6 +132,7 @@ export default function Card({
             type="button"
             disabled={addState === 'adding'}
             onClick={onAdd}
+            title={addState === 'error' ? addError : undefined}
             className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${ADD_CLASSES[addState]}`}
           >
             {ADD_LABELS[addState]}

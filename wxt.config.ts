@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'Vocab Lens',
     description: 'Look up selected words in your local vocabulary buckets',
-    permissions: [],
+    permissions: ['offscreen'],
   },
   vite: () => ({
     plugins: [tailwindcss()],

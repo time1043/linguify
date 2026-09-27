@@ -29,6 +29,18 @@ function describeError(error?: string): string {
   }
 }
 
+// Same codes as the lookup flow, but failures surface their raw detail.
+function describeAddError(error?: string): string {
+  switch (error) {
+    case 'NO_DIR':
+      return '未选择词库目录，点击插件图标打开设置';
+    case 'NO_PERMISSION':
+      return '词库目录需要重新授权，点击插件图标打开设置';
+    default:
+      return error || '写入词库失败';
+  }
+}
+
 const SELECTION_DEBOUNCE_MS = 200;
 const SENTENCE_MAX_LENGTH = 300;
 
@@ -78,6 +90,7 @@ function getSelectionContext(): SelectionContext | null {
 export default function App() {
   const [state, setState] = useState<State | null>(null);
   const [addState, setAddState] = useState<AddState>('idle');
+  const [addError, setAddError] = useState('');
   const requestId = useRef(0);
 
   // Runs when the pin is activated — the selection alone never triggers
@@ -134,16 +147,22 @@ export default function App() {
   const addWord = useCallback(async () => {
     if (!state || addState === 'adding') return;
     setAddState('adding');
+    setAddError('');
     try {
       const response = (await browser.runtime.sendMessage({
         type: 'addWord',
         word: state.selection.word,
         example: { sentence: state.selection.sentence, url: state.selection.url },
       })) as AddWordResponse;
-      if (response?.error) setAddState('error');
-      else setAddState(response?.added ? 'added' : 'exists');
+      if (response?.error) {
+        setAddState('error');
+        setAddError(describeAddError(response.error));
+      } else {
+        setAddState(response?.added ? 'added' : 'exists');
+      }
     } catch {
       setAddState('error');
+      setAddError('扩展通信失败');
     }
   }, [state, addState]);
 
@@ -193,6 +212,7 @@ export default function App() {
         hit={state.hit}
         errorText={state.errorText}
         addState={addState}
+        addError={addError}
         onAdd={() => void addWord()}
         onSpeak={() => speakWord(state.selection.word)}
       />
