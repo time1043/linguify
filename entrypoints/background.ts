@@ -2,10 +2,10 @@
 // with the local vocab server. The content script and popup only talk to it
 // through runtime messages.
 
-import type { Bucket, LookupResponse, RefreshResponse } from '@/lib/types';
+import type { AddWordResponse, Bucket, LookupResponse, RefreshResponse } from '@/lib/types';
 
 import { serverUrlItem } from '@/lib/storage';
-import { buildVocabIndex, lookupWord, type VocabIndex } from '@/lib/vocab';
+import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
 
@@ -64,6 +64,45 @@ export default defineBackground(() => {
           return { ok: true, stats: index.stats } satisfies RefreshResponse;
         } catch (err) {
           return { ok: false, error: errorMessage(err) } satisfies RefreshResponse;
+        }
+      }
+      case 'addWord': {
+        try {
+          const { word, example } = message as {
+            word: string;
+            example: { sentence: string; url: string };
+          };
+          // Enrich the entry from the buckets when the word is known.
+          const index = await getVocabIndex({ allowStale: true });
+          const hit = lookupWord(index, word);
+          const serverUrl = await serverUrlItem.getValue();
+          const res = await fetch(`${serverUrl}/api/words`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              word: normalizeWord(word) ?? word,
+              ipa: hit?.entry.ipa ?? '',
+              meaning: hit?.entry.meaning ?? '',
+              forms: hit?.entry.forms ?? [],
+              example,
+            }),
+          });
+          const data = (await res.json().catch(() => ({}))) as {
+            added?: boolean;
+            reason?: string;
+            error?: string;
+          };
+          if (!res.ok)
+            return {
+              ok: false,
+              error: data.error ?? `vocab server responded ${res.status}`,
+            } satisfies AddWordResponse;
+          return { ok: true, added: data.added, reason: data.reason } satisfies AddWordResponse;
+        } catch {
+          return {
+            ok: false,
+            error: '无法连接词库服务，请先启动 vocab server',
+          } satisfies AddWordResponse;
         }
       }
       default:

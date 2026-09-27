@@ -44,3 +44,21 @@ export interface RefreshResponse {
   stats?: VocabStats;
   error?: string;
 }
+
+// The sentence/url context is captured by the content script; the vocab
+// fields are filled in by the background worker when the word is known.
+export interface AddWordMessage {
+  type: 'addWord';
+  word: string;
+  example: {
+    sentence: string;
+    url: string;
+  };
+}
+
+export interface AddWordResponse {
+  ok: boolean;
+  added?: boolean;
+  reason?: string;
+  error?: string;
+}
