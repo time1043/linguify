@@ -1,10 +1,10 @@
-// Background service worker: owns the vocabulary cache and all communication
-// with the local vocab server. The content script and popup only talk to it
-// through runtime messages.
+// Background service worker: owns the vocabulary cache and all access to the
+// user's vocabulary-bucket directory (via the File System Access API). The
+// content script and popup only talk to it through runtime messages.
 
-import type { AddWordResponse, Bucket, LookupResponse, RefreshResponse } from '@/lib/types';
+import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
 
-import { serverUrlItem } from '@/lib/storage';
+import { VocabAccessError, appendMonthly, getBucketDir, readBuckets } from '@/lib/fsa';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
@@ -17,15 +17,21 @@ interface VocabCache {
 let cache: VocabCache | null = null;
 
 async function fetchVocabIndex(): Promise<VocabIndex> {
-  const serverUrl = await serverUrlItem.getValue();
-  const res = await fetch(`${serverUrl}/api/vocab`);
-  if (!res.ok) throw new Error(`vocab server responded ${res.status}`);
-  const data = (await res.json()) as { buckets?: Bucket[] };
-  return buildVocabIndex(data.buckets ?? []);
+  const dir = await getBucketDir();
+  if (!dir) throw new VocabAccessError('NO_DIR');
+  try {
+    return buildVocabIndex(await readBuckets(dir));
+  } catch (err) {
+    // File access without a granted permission throws NotAllowedError.
+    if (err instanceof VocabAccessError) throw err;
+    if (err instanceof DOMException && err.name === 'NotAllowedError')
+      throw new VocabAccessError('NO_PERMISSION');
+    throw err;
+  }
 }
 
-// Serve lookups from a short-lived cache so rapid selections do not refetch.
-// With allowStale, a failed refresh falls back to the previous snapshot.
+// Serve lookups from a short-lived cache so rapid selections do not re-read
+// files. With allowStale, a failed refresh falls back to the previous snapshot.
 async function getVocabIndex(
   options: { force?: boolean; allowStale?: boolean } = {},
 ): Promise<VocabIndex> {
@@ -41,7 +47,9 @@ async function getVocabIndex(
   }
 }
 
-function errorMessage(err: unknown): string {
+function errorCode(err: unknown): string {
+  if (err instanceof VocabAccessError) return err.code;
+  if (err instanceof DOMException && err.name === 'NotAllowedError') return 'NO_PERMISSION';
   return err instanceof Error ? err.message : String(err);
 }
 
@@ -55,7 +63,7 @@ export default defineBackground(() => {
           const index = await getVocabIndex({ allowStale: true });
           return { hit: lookupWord(index, word) } satisfies LookupResponse;
         } catch (err) {
-          return { hit: null, error: errorMessage(err) } satisfies LookupResponse;
+          return { hit: null, error: errorCode(err) } satisfies LookupResponse;
         }
       }
       case 'refreshVocab': {
@@ -63,7 +71,7 @@ export default defineBackground(() => {
           const index = await getVocabIndex({ force: true });
           return { ok: true, stats: index.stats } satisfies RefreshResponse;
         } catch (err) {
-          return { ok: false, error: errorMessage(err) } satisfies RefreshResponse;
+          return { ok: false, error: errorCode(err) } satisfies RefreshResponse;
         }
       }
       case 'addWord': {
@@ -72,37 +80,37 @@ export default defineBackground(() => {
             word: string;
             example: { sentence: string; url: string };
           };
-          // Enrich the entry from the buckets when the word is known.
-          const index = await getVocabIndex({ allowStale: true });
-          const hit = lookupWord(index, word);
-          const serverUrl = await serverUrlItem.getValue();
-          const res = await fetch(`${serverUrl}/api/words`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              word: normalizeWord(word) ?? word,
-              ipa: hit?.entry.ipa ?? '',
-              meaning: hit?.entry.meaning ?? '',
-              forms: hit?.entry.forms ?? [],
-              example,
-            }),
+          // Enrich the entry from the buckets when the word is known; the
+          // write itself works even when the buckets cannot be read.
+          let ipa = '';
+          let meaning = '';
+          let forms: string[] = [];
+          try {
+            const hit = lookupWord(await getVocabIndex({ allowStale: true }), word);
+            if (hit) {
+              ipa = hit.entry.ipa;
+              meaning = hit.entry.meaning;
+              forms = hit.entry.forms;
+            }
+          } catch {
+            // Enrichment is best-effort.
+          }
+          const dir = await getBucketDir();
+          if (!dir) throw new VocabAccessError('NO_DIR');
+          const result = await appendMonthly(dir, {
+            word: normalizeWord(word) ?? word,
+            ipa,
+            meaning,
+            forms,
+            example,
           });
-          const data = (await res.json().catch(() => ({}))) as {
-            added?: boolean;
-            reason?: string;
-            error?: string;
-          };
-          if (!res.ok)
-            return {
-              ok: false,
-              error: data.error ?? `vocab server responded ${res.status}`,
-            } satisfies AddWordResponse;
-          return { ok: true, added: data.added, reason: data.reason } satisfies AddWordResponse;
-        } catch {
           return {
-            ok: false,
-            error: '无法连接词库服务，请先启动 vocab server',
+            ok: true,
+            added: result.added,
+            reason: result.added ? undefined : 'exists',
           } satisfies AddWordResponse;
+        } catch (err) {
+          return { ok: false, error: errorCode(err) } satisfies AddWordResponse;
         }
       }
       default:
