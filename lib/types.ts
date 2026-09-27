@@ -23,3 +23,24 @@ export interface VocabStats {
   buckets: number;
   words: number;
 }
+
+// Messages sent from the content script / popup to the background worker.
+export interface LookupMessage {
+  type: 'lookup';
+  word: string;
+}
+
+export interface LookupResponse {
+  hit: LookupHit | null;
+  error?: string;
+}
+
+export interface RefreshVocabMessage {
+  type: 'refreshVocab';
+}
+
+export interface RefreshResponse {
+  ok: boolean;
+  stats?: VocabStats;
+  error?: string;
+}
