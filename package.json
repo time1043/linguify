@@ -1,19 +1,20 @@
 {
   "name": "wow-vocab-extension",
-  "description": "Look up selected words in local vocabulary buckets",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
+  "description": "Look up selected words in local vocabulary buckets",
   "type": "module",
-  "packageManager": "pnpm@11.22.0",
   "scripts": {
-    "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
-    "postinstall": "wxt prepare"
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "fmt": "oxfmt .",
+    "fmt:check": "oxfmt --check .",
+    "postinstall": "wxt prepare",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox"
   },
   "dependencies": {
     "react": "^19.2.4",
@@ -23,8 +24,10 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@wxt-dev/module-react": "^1.1.5",
+    "oxfmt": "^0.48.0",
     "typescript": "^5.9.3",
     "web-ext": "^10.5.0",
     "wxt": "^0.21.3"
-  }
+  },
+  "packageManager": "pnpm@11.22.0"
 }
