@@ -14,6 +14,7 @@ interface CardProps {
   selection: SelectionContext;
   status: CardStatus;
   hit: LookupHit | null;
+  errorText: string;
   addState: AddState;
   onAdd: () => void;
 }
@@ -36,7 +37,7 @@ const ADD_CLASSES: Record<AddState, string> = {
   error: 'bg-red-100 text-red-700 hover:bg-red-200',
 };
 
-export default function Card({ selection, status, hit, addState, onAdd }: CardProps) {
+export default function Card({ selection, status, hit, errorText, addState, onAdd }: CardProps) {
   const { rect } = selection;
   // Prefer below the selection; flip above when near the viewport bottom.
   const flip = window.innerHeight - rect.bottom < 200;
@@ -53,9 +54,7 @@ export default function Card({ selection, status, hit, addState, onAdd }: CardPr
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-xl">
-        {status === 'error' && (
-          <p className="text-sm text-red-600">词库服务未连接，请先启动 vocab server</p>
-        )}
+        {status === 'error' && <p className="text-sm text-red-600">{errorText}</p>}
         {status === 'pending' && <p className="text-sm text-zinc-400">查询中…</p>}
         {status === 'missing' && (
           <>
@@ -68,6 +67,9 @@ export default function Card({ selection, status, hit, addState, onAdd }: CardPr
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
                 {hit.bucket}
+              </span>
+              <span className="text-xs text-zinc-400" title="在词本中的位置">
+                #{hit.entry.position}
               </span>
               <span className="text-lg font-semibold">{hit.entry.word}</span>
               {hit.entry.ipa && <span className="text-sm text-zinc-500">{hit.entry.ipa}</span>}

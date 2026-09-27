@@ -10,6 +10,19 @@ interface State {
   selection: SelectionContext;
   status: CardStatus;
   hit: LookupHit | null;
+  errorText: string;
+}
+
+// Map background error codes to actionable card copy.
+function describeError(error?: string): string {
+  switch (error) {
+    case 'NO_DIR':
+      return '未选择词库目录，点击插件图标打开设置';
+    case 'NO_PERMISSION':
+      return '词库目录需要重新授权，点击插件图标打开设置';
+    default:
+      return '读取词库失败';
+  }
 }
 
 const SELECTION_DEBOUNCE_MS = 200;
@@ -65,7 +78,7 @@ export default function App() {
 
   const lookup = useCallback(async (selection: SelectionContext) => {
     const id = ++requestId.current;
-    setState({ selection, status: 'pending', hit: null });
+    setState({ selection, status: 'pending', hit: null, errorText: '' });
     setAddState('idle');
     try {
       const response = (await browser.runtime.sendMessage({
@@ -73,15 +86,23 @@ export default function App() {
         word: selection.word,
       })) as LookupResponse;
       if (id !== requestId.current) return; // a newer selection superseded this one
-      if (response?.error) setState({ selection, status: 'error', hit: null });
+      if (response?.error)
+        setState({
+          selection,
+          status: 'error',
+          hit: null,
+          errorText: describeError(response.error),
+        });
       else
         setState({
           selection,
           status: response?.hit ? 'found' : 'missing',
           hit: response?.hit ?? null,
+          errorText: '',
         });
     } catch {
-      if (id === requestId.current) setState({ selection, status: 'error', hit: null });
+      if (id === requestId.current)
+        setState({ selection, status: 'error', hit: null, errorText: '扩展通信失败' });
     }
   }, []);
 
@@ -132,6 +153,7 @@ export default function App() {
       selection={state.selection}
       status={state.status}
       hit={state.hit}
+      errorText={state.errorText}
       addState={addState}
       onAdd={() => void addWord()}
     />
