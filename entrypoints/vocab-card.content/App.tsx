@@ -6,9 +6,12 @@ import { normalizeWord } from '@/lib/vocab';
 
 import Card, { type AddState, type CardStatus, type SelectionContext } from './Card';
 import { speakWord, stopSpeaking } from './speech';
+import WordPin from './WordPin';
 
 interface State {
   selection: SelectionContext;
+  // The card only opens while the pointer rests on the selection pin.
+  cardOpen: boolean;
   status: CardStatus;
   hit: LookupHit | null;
   errorText: string;
@@ -28,15 +31,6 @@ function describeError(error?: string): string {
 
 const SELECTION_DEBOUNCE_MS = 200;
 const SENTENCE_MAX_LENGTH = 300;
-const CARD_GAP = 8;
-
-// Prefer below the selection; flip above when near the viewport bottom.
-function cardPosition(rect: SelectionContext['rect']): React.CSSProperties {
-  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 328);
-  return window.innerHeight - rect.bottom < 200
-    ? { left, bottom: window.innerHeight - rect.top + CARD_GAP }
-    : { left, top: rect.bottom + CARD_GAP };
-}
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -86,20 +80,22 @@ export default function App() {
   const [addState, setAddState] = useState<AddState>('idle');
   const requestId = useRef(0);
 
-  const lookup = useCallback(async (selection: SelectionContext) => {
+  // Runs when the pin is activated — the selection alone never triggers
+  // network work or speech.
+  const runLookup = useCallback(async (selection: SelectionContext) => {
     const id = ++requestId.current;
-    setState({ selection, status: 'pending', hit: null, errorText: '' });
+    setState({ selection, cardOpen: true, status: 'pending', hit: null, errorText: '' });
     setAddState('idle');
-    speakWord(selection.word);
     try {
       const response = (await browser.runtime.sendMessage({
         type: 'lookup',
         word: selection.word,
       })) as LookupResponse;
-      if (id !== requestId.current) return; // a newer selection superseded this one
+      if (id !== requestId.current) return; // a newer activation superseded this one
       if (response?.error)
         setState({
           selection,
+          cardOpen: true,
           status: 'error',
           hit: null,
           errorText: describeError(response.error),
@@ -107,14 +103,32 @@ export default function App() {
       else
         setState({
           selection,
+          cardOpen: true,
           status: response?.hit ? 'found' : 'missing',
           hit: response?.hit ?? null,
           errorText: '',
         });
     } catch {
       if (id === requestId.current)
-        setState({ selection, status: 'error', hit: null, errorText: '扩展通信失败' });
+        setState({
+          selection,
+          cardOpen: true,
+          status: 'error',
+          hit: null,
+          errorText: '扩展通信失败',
+        });
     }
+  }, []);
+
+  const openCard = useCallback(() => {
+    if (!state) return;
+    // Speak only when opening; re-entering an open pin stays silent.
+    if (!state.cardOpen) speakWord(state.selection.word);
+    void runLookup(state.selection);
+  }, [state, runLookup]);
+
+  const closeCard = useCallback(() => {
+    setState((prev) => (prev ? { ...prev, cardOpen: false } : prev));
   }, []);
 
   const addWord = useCallback(async () => {
@@ -135,7 +149,7 @@ export default function App() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    // Hiding the card also stops any ongoing pronunciation.
+    // Hiding everything also stops any ongoing pronunciation.
     const dismiss = () => {
       setState(null);
       stopSpeaking();
@@ -144,7 +158,9 @@ export default function App() {
       clearTimeout(timer);
       timer = setTimeout(() => {
         const selection = getSelectionContext();
-        if (selection) void lookup(selection);
+        // A new selection only shows the pin; lookup and speech wait for hover.
+        if (selection)
+          setState({ selection, cardOpen: false, status: 'pending', hit: null, errorText: '' });
         else dismiss();
       }, SELECTION_DEBOUNCE_MS);
     };
@@ -162,10 +178,15 @@ export default function App() {
       document.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('scroll', onScroll, { capture: true });
     };
-  }, [lookup]);
+  }, []);
 
   return state ? (
-    <div className="fixed z-[2147483647] font-sans" style={cardPosition(state.selection.rect)}>
+    <WordPin
+      selection={state.selection}
+      active={state.cardOpen}
+      onActivate={openCard}
+      onDeactivate={closeCard}
+    >
       <Card
         selection={state.selection}
         status={state.status}
@@ -175,6 +196,6 @@ export default function App() {
         onAdd={() => void addWord()}
         onSpeak={() => speakWord(state.selection.word)}
       />
-    </div>
+    </WordPin>
   ) : null;
 }
