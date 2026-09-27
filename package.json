@@ -13,12 +13,12 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
     "postinstall": "wxt prepare",
-    "vocab": "node server/index.mjs",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "idb-keyval": "^6.3.0",
     "jotai": "^3.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
