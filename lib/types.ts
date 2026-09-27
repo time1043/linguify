@@ -7,6 +7,8 @@ export interface WordEntry {
   ipa: string;
   meaning: string;
   forms: string[];
+  // Only present on monthly entries; bucket files never carry it.
+  example?: { sentence: string; url: string };
 }
 
 export interface Bucket {

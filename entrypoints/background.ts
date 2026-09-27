@@ -2,9 +2,9 @@
 // user's vocabulary-bucket directory (via the File System Access API). The
 // content script and popup only talk to it through runtime messages.
 
-import { VocabAccessError, appendMonthly, getBucketDir, readBuckets } from '@/lib/fsa';
-
 import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
+
+import { VocabAccessError, appendMonthly, getBucketDir, readBuckets } from '@/lib/fsa';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;

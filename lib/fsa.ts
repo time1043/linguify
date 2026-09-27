@@ -3,8 +3,16 @@
 // background service worker can read buckets and write the monthly file.
 
 import { get, set } from 'idb-keyval';
-import { appendWord, monthKey, serializeMonthlyDoc, type MonthlyDoc } from './monthly';
-import type { AddWordInput, Bucket } from './types';
+
+import type { Bucket } from './types';
+
+import {
+  appendWord,
+  monthKey,
+  serializeMonthlyDoc,
+  type AddWordInput,
+  type MonthlyDoc,
+} from './monthly';
 
 const BUCKET_DIR_KEY = 'bucketDirHandle';
 
@@ -12,6 +20,11 @@ const BUCKET_DIR_KEY = 'bucketDirHandle';
 type BucketDirHandle = FileSystemDirectoryHandle & {
   queryPermission(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
   requestPermission(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
+};
+
+// Directory async iteration helpers are also missing from the DOM typings.
+type IterableDirectoryHandle = FileSystemDirectoryHandle & {
+  values(): AsyncIterableIterator<FileSystemDirectoryHandle | FileSystemFileHandle>;
 };
 
 // Thrown to UI surfaces with a stable code the card can map to copy.
@@ -27,9 +40,13 @@ function isNotAllowed(err: unknown): boolean {
 
 // Must be called from a visible page (popup / options) — it needs a user gesture.
 export async function pickBucketDir(): Promise<BucketDirHandle> {
-  const picker = (window as unknown as {
-    showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>;
-  }).showDirectoryPicker;
+  const picker = (
+    window as unknown as {
+      showDirectoryPicker?: (options?: {
+        mode?: 'read' | 'readwrite';
+      }) => Promise<FileSystemDirectoryHandle>;
+    }
+  ).showDirectoryPicker;
   if (!picker) throw new Error('此浏览器不支持文件系统访问，需要 Chrome');
   const handle = (await picker.call(window, { mode: 'readwrite' })) as BucketDirHandle;
   await set(BUCKET_DIR_KEY, handle);
@@ -57,7 +74,7 @@ async function* jsonFiles(
   dir: FileSystemDirectoryHandle,
   prefix = '',
 ): AsyncGenerator<{ handle: FileSystemFileHandle; path: string }> {
-  for await (const entry of dir.values()) {
+  for await (const entry of (dir as IterableDirectoryHandle).values()) {
     if (entry.kind === 'directory') {
       // Monthly outputs and repo noise are never vocab buckets.
       if (['monthly', 'node_modules', '.git'].includes(entry.name)) continue;
@@ -78,7 +95,8 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
   for await (const { handle, path } of jsonFiles(root)) {
     try {
       const doc = JSON.parse(await (await handle.getFile()).text());
-      if (Array.isArray(doc?.words)) buckets.push({ name: String(doc.name ?? path), words: doc.words });
+      if (Array.isArray(doc?.words))
+        buckets.push({ name: String(doc.name ?? path), words: doc.words });
     } catch (err) {
       console.warn(`skip unreadable bucket ${path}:`, err);
     }
