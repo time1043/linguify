@@ -25,7 +25,7 @@ the bucket directory over HTTP.
 ```sh
 pnpm install
 
-# 1. Start the vocab server (default port 7777).
+# 1. Start the vocab server (default port 8765).
 pnpm vocab
 
 # 2. Start WXT dev mode — a browser opens with the extension loaded, HMR included.

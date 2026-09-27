@@ -9,7 +9,8 @@
 //
 // Env:
 //   VOCAB_BUCKET_DIR  root of the vocabulary-bucket repo
-//   PORT              port to listen on (default 7777)
+//   PORT              port to listen on (default 8765; avoid Windows
+//                     Hyper-V reserved ranges, e.g. 7681-7780)
 
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
@@ -20,7 +21,7 @@ const ROOT =
   process.env.VOCAB_BUCKET_DIR ?? 'C:/Users/28180/Documents/code3/base/web/vocabulary-bucket';
 const DATA_DIR = path.join(ROOT, 'data');
 const MONTHLY_DIR = path.join(ROOT, 'monthly');
-const PORT = Number(process.env.PORT ?? 7777);
+const PORT = Number(process.env.PORT ?? 8765);
 const MAX_BODY_BYTES = 1024 * 1024;
 
 class HttpError extends Error {
