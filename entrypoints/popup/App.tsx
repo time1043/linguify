@@ -44,7 +44,7 @@ export default function App() {
       </button>
 
       <p className="text-xs leading-relaxed text-zinc-500">
-        在网页上选中一个单词即可查询词库；无论是否查到，都可以点卡片上的「加入月度」把它写进
+        在网页上选中一个单词，悬停其左上角的小圆点即可查询词库；无论是否查到，都可以点卡片上的「加入月度」把它写进
         monthly/ 当月文件。
       </p>
     </div>

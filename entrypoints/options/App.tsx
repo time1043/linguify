@@ -79,7 +79,10 @@ export default function App() {
 
       <section className="mt-4 rounded-xl border border-zinc-200 bg-white p-4 text-xs leading-relaxed text-zinc-500">
         <h2 className="text-sm font-medium text-zinc-800">使用方式</h2>
-        <p className="mt-2">1. 在任意网页选中一个单词，卡片会显示词本、位置、音标、释义和变形。</p>
+        <p className="mt-2">
+          1.
+          在任意网页选中一个单词，其左上角会出现一个小圆点；鼠标移上去会朗读单词并显示词本、位置、音标、释义和变形。
+        </p>
         <p className="mt-1">
           2. 点卡片上的「加入月度」，单词连同例句和网页地址会被写入词库目录的
           monthly/YYYY-MM.json；重复添加会自动跳过。

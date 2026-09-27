@@ -20,8 +20,6 @@ interface CardProps {
   onSpeak: () => void;
 }
 
-const CARD_GAP = 8;
-
 const ADD_LABELS: Record<AddState, string> = {
   idle: '加入月度',
   adding: '添加中…',
@@ -81,24 +79,10 @@ export default function Card({
   onAdd,
   onSpeak,
 }: CardProps) {
-  const { rect } = selection;
-  // Prefer below the selection; flip above when near the viewport bottom.
-  const flip = window.innerHeight - rect.bottom < 200;
-  const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 328);
-
   return (
-    <div
-      className="fixed z-[2147483647] w-80 font-sans"
-      style={
-        flip
-          ? { left, bottom: window.innerHeight - rect.top + CARD_GAP }
-          : { left, top: rect.bottom + CARD_GAP }
-      }
-      // Keep the page selection (and therefore this card) alive while the
-      // user interacts with the card's buttons.
-      onMouseDown={(e) => e.preventDefault()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
+    // Keep the page selection (and therefore this card) alive while the
+    // user interacts with the card's buttons. Placement is up to the parent.
+    <div className="w-80 font-sans" onMouseDown={(e) => e.preventDefault()}>
       <div className="rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-xl">
         {status === 'error' && <p className="text-sm text-red-600">{errorText}</p>}
         {status === 'pending' && <p className="text-sm text-zinc-400">查询中…</p>}

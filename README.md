@@ -42,8 +42,9 @@ select `.output/chrome-mv3`.
 
 ## Usage
 
-1. Select a word on any page — the card shows the bucket, its position, the
-   word, ipa, meaning and forms; unmatched words show 没查到.
+1. Select a word on any page — a small dot appears at its top-left corner.
+   Hovering the dot speaks the word and opens the card with the bucket, its
+   position, the word, ipa, meaning and forms; unmatched words show 没查到.
 2. Click 加入月度 — the word is appended to `monthly/YYYY-MM.json` with an
    `example: { sentence, url }`; duplicates are skipped.
 
