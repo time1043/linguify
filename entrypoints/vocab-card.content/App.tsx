@@ -5,6 +5,7 @@ import type { AddWordResponse, LookupHit, LookupResponse } from '@/lib/types';
 import { normalizeWord } from '@/lib/vocab';
 
 import Card, { type AddState, type CardStatus, type SelectionContext } from './Card';
+import { speakWord, stopSpeaking } from './speech';
 
 interface State {
   selection: SelectionContext;
@@ -80,6 +81,7 @@ export default function App() {
     const id = ++requestId.current;
     setState({ selection, status: 'pending', hit: null, errorText: '' });
     setAddState('idle');
+    speakWord(selection.word);
     try {
       const response = (await browser.runtime.sendMessage({
         type: 'lookup',
@@ -124,18 +126,23 @@ export default function App() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Hiding the card also stops any ongoing pronunciation.
+    const dismiss = () => {
+      setState(null);
+      stopSpeaking();
+    };
     const onSelectionChange = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         const selection = getSelectionContext();
         if (selection) void lookup(selection);
-        else setState(null);
+        else dismiss();
       }, SELECTION_DEBOUNCE_MS);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setState(null);
+      if (event.key === 'Escape') dismiss();
     };
-    const onScroll = () => setState(null);
+    const onScroll = () => dismiss();
 
     document.addEventListener('selectionchange', onSelectionChange);
     document.addEventListener('keydown', onKeyDown);
@@ -156,6 +163,7 @@ export default function App() {
       errorText={state.errorText}
       addState={addState}
       onAdd={() => void addWord()}
+      onSpeak={() => speakWord(state.selection.word)}
     />
   ) : null;
 }
