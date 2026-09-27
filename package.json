@@ -13,6 +13,7 @@
     "fmt": "oxfmt .",
     "fmt:check": "oxfmt --check .",
     "postinstall": "wxt prepare",
+    "vocab": "node server/index.mjs",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox"
   },
