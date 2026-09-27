@@ -1,9 +1,10 @@
 {
-  "name": "wxt-react-starter",
-  "description": "manifest.json description",
+  "name": "wow-vocab-extension",
+  "description": "Look up selected words in local vocabulary buckets",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "pnpm@11.22.0",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",
