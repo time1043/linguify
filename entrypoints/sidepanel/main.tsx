@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
+import './style.css';
+
 // Surface any boot failure as visible text instead of a blank panel, then
 // boot the app. The handlers only paint the overlay before React has
 // mounted; the app is imported dynamically so a failure anywhere in the
