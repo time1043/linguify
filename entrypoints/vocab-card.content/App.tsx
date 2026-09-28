@@ -4,7 +4,12 @@ import type { AddWordResponse, LookupHit, LookupResponse } from '@/lib/types';
 
 import { normalizeWord } from '@/lib/vocab';
 
-import Card, { type AddState, type CardStatus, type SelectionContext } from './Card';
+import Card, {
+  type AddState,
+  type CardStatus,
+  type SelectionContext,
+  type SelectionKind,
+} from './Card';
 import { speakWord, stopSpeaking } from './speech';
 import WordPin from './WordPin';
 
@@ -43,6 +48,9 @@ function describeAddError(error?: string): string {
 
 const SELECTION_DEBOUNCE_MS = 200;
 const SENTENCE_MAX_LENGTH = 300;
+const AI_SENTENCE_MAX_LENGTH = 600;
+// Selections up to this many characters expand to their containing sentence.
+const EXPAND_TO_SENTENCE_MAX = 60;
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -64,12 +72,17 @@ function extractSentence(element: Element, word: string): string {
   return found.length > SENTENCE_MAX_LENGTH ? `${found.slice(0, SENTENCE_MAX_LENGTH)}…` : found;
 }
 
-// Capture the current single-word selection with its position and context.
+// Capture the current selection with its position and context. Single words
+// go to the lookup card; longer selections go to AI sentence analysis.
 function getSelectionContext(): SelectionContext | null {
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-  const word = normalizeWord(selection.toString());
-  if (!word) return null;
+  const text = selection.toString();
+  const tokens = text.match(/[A-Za-z][A-Za-z'’-]*/g) ?? [];
+  if (tokens.length === 0) return null;
+  const kind: SelectionKind = tokens.length === 1 ? 'word' : 'sentence';
+  const word = kind === 'word' ? (normalizeWord(text) ?? undefined) : undefined;
+  if (kind === 'word' && !word) return null;
   const node = selection.anchorNode;
   const element = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement;
   if (
@@ -79,10 +92,27 @@ function getSelectionContext(): SelectionContext | null {
   )
     return null;
   const rect = selection.getRangeAt(0).getBoundingClientRect();
+
+  let sentence: string;
+  if (kind === 'sentence') {
+    const raw = text.replace(/\s+/g, ' ').trim();
+    // Short multi-word selections expand to their containing sentence.
+    sentence =
+      raw.length < EXPAND_TO_SENTENCE_MAX
+        ? extractSentence(element, tokens[0]!.toLowerCase())
+        : raw;
+    if (sentence.length > AI_SENTENCE_MAX_LENGTH) {
+      sentence = `${sentence.slice(0, AI_SENTENCE_MAX_LENGTH)}…`;
+    }
+  } else {
+    sentence = extractSentence(element, word!);
+  }
+
   return {
+    kind,
     word,
     rect: { top: rect.top, left: rect.left, right: rect.right, bottom: rect.bottom },
-    sentence: extractSentence(element, word),
+    sentence,
     url: window.location.href,
   };
 }
@@ -91,6 +121,7 @@ export default function App() {
   const [state, setState] = useState<State | null>(null);
   const [addState, setAddState] = useState<AddState>('idle');
   const [addError, setAddError] = useState('');
+  const [pinHint, setPinHint] = useState('');
   const requestId = useRef(0);
 
   // Runs when the pin is activated — the selection alone never triggers
@@ -134,7 +165,7 @@ export default function App() {
   }, []);
 
   const openCard = useCallback(() => {
-    if (!state) return;
+    if (!state?.selection.word) return;
     // Speak only when opening; re-entering an open pin stays silent.
     if (!state.cardOpen) speakWord(state.selection.word);
     void runLookup(state.selection);
@@ -143,6 +174,27 @@ export default function App() {
   const closeCard = useCallback(() => {
     setState((prev) => (prev ? { ...prev, cardOpen: false } : prev));
   }, []);
+
+  // Sentence selections open the AI side panel instead of the word card.
+  const openAiPanel = useCallback(async () => {
+    if (!state?.selection) return;
+    setPinHint('');
+    try {
+      const response = (await browser.runtime.sendMessage({
+        type: 'openAiPanel',
+        sentence: state.selection.sentence,
+        url: state.selection.url,
+      })) as { ok?: boolean };
+      if (response?.ok) {
+        // The side panel took over; the pin goes away.
+        setState(null);
+        return;
+      }
+      setPinHint('点击插件图标打开侧边栏');
+    } catch {
+      setPinHint('点击插件图标打开侧边栏');
+    }
+  }, [state]);
 
   const addWord = useCallback(async () => {
     if (!state || addState === 'adding') return;
@@ -202,8 +254,10 @@ export default function App() {
   return state ? (
     <WordPin
       selection={state.selection}
-      active={state.cardOpen}
-      onActivate={openCard}
+      tone={state.selection.kind}
+      hint={pinHint}
+      active={state.selection.kind === 'word' && state.cardOpen}
+      onActivate={state.selection.kind === 'word' ? openCard : () => void openAiPanel()}
       onDeactivate={closeCard}
     >
       <Card
@@ -214,7 +268,7 @@ export default function App() {
         addState={addState}
         addError={addError}
         onAdd={() => void addWord()}
-        onSpeak={() => speakWord(state.selection.word)}
+        onSpeak={() => speakWord(state.selection.word ?? '')}
       />
     </WordPin>
   ) : null;

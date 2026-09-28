@@ -1,13 +1,17 @@
 import type { ReactNode } from 'react';
 
-import type { SelectionContext } from './Card';
+import type { SelectionContext, SelectionKind } from './Card';
 
 interface WordPinProps {
   selection: SelectionContext;
+  // 'word' pins open the lookup card, 'ai' pins open the AI side panel.
+  tone: SelectionKind;
+  // Overrides the dot tooltip, e.g. when the side panel failed to open.
+  hint?: string;
   active: boolean;
   onActivate: () => void;
   onDeactivate: () => void;
-  children: ReactNode;
+  children?: ReactNode;
 }
 
 const PIN_SIZE = 20;
@@ -20,6 +24,8 @@ const CARD_WIDTH = 320;
 // padding bridge, so moving between dot and card never closes it.
 export default function WordPin({
   selection,
+  tone,
+  hint,
   active,
   onActivate,
   onDeactivate,
@@ -33,6 +39,7 @@ export default function WordPin({
   const spaceBelow = window.innerHeight - top - PIN_SIZE - 16;
   const placeAbove = spaceBelow < 180;
   const maxHeight = placeAbove ? top - 16 : spaceBelow;
+  const label = hint ?? (tone === 'sentence' ? 'AI 分析句子' : '查看释义');
 
   return (
     <div
@@ -45,13 +52,13 @@ export default function WordPin({
     >
       <button
         type="button"
-        aria-label="查看释义"
-        title="查看释义"
+        aria-label={label}
+        title={label}
         onMouseEnter={onActivate}
         onClick={onActivate}
-        className={`h-5 w-5 rounded-full bg-indigo-600 shadow-lg ring-2 ring-white transition-transform hover:scale-110 ${
-          active ? 'opacity-70' : ''
-        }`}
+        className={`h-5 w-5 rounded-full shadow-lg ring-2 ring-white transition-transform hover:scale-110 ${
+          tone === 'sentence' ? 'bg-violet-600' : 'bg-indigo-600'
+        } ${active ? 'opacity-70' : ''}`}
       />
       {active && (
         <div

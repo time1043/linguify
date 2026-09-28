@@ -1,8 +1,13 @@
 import type { LookupHit } from '@/lib/types';
 
+export type SelectionKind = 'word' | 'sentence';
+
 export interface SelectionContext {
-  word: string;
+  kind: SelectionKind;
+  // Headword for word selections; absent for sentence selections.
+  word?: string;
   rect: { top: number; left: number; right: number; bottom: number };
+  // Enclosing sentence (word selections) or the analyzed text (sentences).
   sentence: string;
   url: string;
 }
