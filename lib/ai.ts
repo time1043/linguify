@@ -1,9 +1,10 @@
 // Sentence analysis through the pi-ai SDK (@earendil-works/pi-ai) with the
 // DeepSeek provider. Runs in windowed extension contexts (side panel); the
 // API key is passed explicitly because browsers have no environment.
+// pi-ai is imported lazily so a failure in the SDK can never break the
+// panel's initial render.
 
-import { createModels, type AssistantMessage, type Message } from '@earendil-works/pi-ai';
-import { deepseekProvider } from '@earendil-works/pi-ai/providers/deepseek';
+import type { AssistantMessage, Message, MutableModels } from '@earendil-works/pi-ai';
 
 import { aiApiKeyItem, aiModelItem } from './settings';
 
@@ -22,10 +23,12 @@ using exactly these labels, no markdown syntax:
 【翻译】natural Chinese translation
 For follow-up questions, answer directly and concisely in Chinese.`;
 
-let cachedModels: ReturnType<typeof createModels> | null = null;
+let cachedModels: MutableModels | null = null;
 
-function getModels() {
+async function getModels(): Promise<MutableModels> {
   if (!cachedModels) {
+    const { createModels } = await import('@earendil-works/pi-ai');
+    const { deepseekProvider } = await import('@earendil-works/pi-ai/providers/deepseek');
     cachedModels = createModels();
     cachedModels.setProvider(deepseekProvider());
   }
@@ -64,10 +67,12 @@ export async function aiComplete(messages: AiMessage[]): Promise<string> {
   const [apiKey, modelId] = await Promise.all([aiApiKeyItem.getValue(), aiModelItem.getValue()]);
   if (!apiKey) throw new Error('NO_API_KEY');
 
-  const model = getModels().getModel('deepseek', modelId);
+  const model = (await getModels()).getModel('deepseek', modelId);
   if (!model) throw new Error(`unknown model: ${modelId}`);
 
-  const response: AssistantMessage = await getModels().complete(
+  const response: AssistantMessage = await (
+    await getModels()
+  ).complete(
     model,
     {
       systemPrompt: SYSTEM_PROMPT,

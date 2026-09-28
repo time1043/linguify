@@ -59,7 +59,9 @@ from, example: { sentence, url } }] }`. `from` is dictionary provenance
   are delegated to an offscreen document, session writes happen directly in
   the side panel.
 - Side panel handoff: the content script stores a pending session in
-  `chrome.storage` and calls `chrome.sidePanel.open()`; the panel watches
-  storage, so it also picks up sessions opened via the toolbar icon.
+  `chrome.storage` and calls `chrome.sidePanel.open()`; if Chrome refuses the
+  gesture, the popup shows an 「AI 分析」 button (clicking the toolbar icon
+  always opens the popup, never the panel). The panel watches storage and
+  picks up the pending session either way.
 - State: jotai atoms for popup/options shared state; plain React state inside
   ephemeral UI (chat, card).

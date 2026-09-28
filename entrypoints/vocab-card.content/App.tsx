@@ -190,9 +190,9 @@ export default function App() {
         setState(null);
         return;
       }
-      setPinHint('点击插件图标打开侧边栏');
+      setPinHint('在插件弹窗中点击「AI 分析」打开');
     } catch {
-      setPinHint('点击插件图标打开侧边栏');
+      setPinHint('在插件弹窗中点击「AI 分析」打开');
     }
   }, [state]);
 

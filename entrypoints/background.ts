@@ -73,18 +73,6 @@ function errorCode(err: unknown): string {
 }
 
 export default defineBackground(() => {
-  // Clicking the toolbar icon opens the AI side panel (fallback entry point
-  // for when chrome.sidePanel.open() has no user gesture to ride on).
-  const sidePanel = (
-    browser as unknown as {
-      sidePanel?: {
-        setPanelBehavior(options: { openPanelOnActionClick: boolean }): Promise<void>;
-        open(options: { tabId: number }): Promise<void>;
-      };
-    }
-  ).sidePanel;
-  void sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
-
   browser.runtime.onMessage.addListener(async (message: unknown, sender): Promise<unknown> => {
     const { type } = (message ?? {}) as { type?: string };
     switch (type) {
@@ -93,14 +81,19 @@ export default defineBackground(() => {
           const { sentence, url } = (message ?? {}) as { sentence?: string; url?: string };
           if (!sentence) return { ok: false, error: 'no sentence' };
           await aiPendingSessionItem.setValue({ sentence, url: url ?? '', ts: Date.now() });
+          const sidePanel = (
+            browser as unknown as {
+              sidePanel?: { open(options: { tabId: number }): Promise<void> };
+            }
+          ).sidePanel;
           if (!sidePanel) throw new Error('side panel unavailable');
           const tabId = (sender as { tab?: { id?: number } } | undefined)?.tab?.id;
           if (tabId == null) throw new Error('sender tab unknown');
           await sidePanel.open({ tabId });
           return { ok: true };
         } catch {
-          // Without a usable gesture the user opens the panel via the toolbar
-          // icon; the pending session is already stored for the panel to pick up.
+          // Without a usable gesture the popup's 「AI 分析」 button opens the
+          // panel; the pending session is already stored for the panel.
           return { ok: false, error: 'GESTURE' };
         }
       }
