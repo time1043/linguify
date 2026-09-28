@@ -19,6 +19,10 @@ interface WriteMonthlyMessage {
 interface AiChatMessage {
   type: 'aiChat';
   messages: AiMessage[];
+  // The offscreen document has no chrome.storage API — the background
+  // worker reads the settings and passes them in.
+  apiKey: string;
+  model: string;
 }
 
 interface LoadAiSessionMessage {
@@ -71,7 +75,10 @@ async function handle(msg: OffscreenMessage): Promise<unknown> {
       } satisfies AddWordResponse;
     }
     case 'aiChat': {
-      return { ok: true, text: await aiComplete(msg.messages) };
+      return {
+        ok: true,
+        text: await aiComplete(msg.messages, { apiKey: msg.apiKey, model: msg.model }),
+      };
     }
     case 'loadAiSession': {
       // A missing directory just means the session cannot be restored yet;

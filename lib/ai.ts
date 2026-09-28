@@ -1,12 +1,16 @@
 // Sentence analysis through the pi-ai SDK (@earendil-works/pi-ai) with the
-// DeepSeek provider. Runs in windowed extension contexts (side panel); the
-// API key is passed explicitly because browsers have no environment.
+// DeepSeek provider. Runs inside the offscreen document, which has NO
+// chrome.storage API — the API key/model must be passed in by the caller
+// (the background worker reads them from chrome.storage and relays them).
 // pi-ai is imported lazily so a failure in the SDK can never break the
 // panel's initial render.
 
 import type { AssistantMessage, Message, MutableModels } from '@earendil-works/pi-ai';
 
-import { aiApiKeyItem, aiModelItem } from './settings';
+export interface AiConfig {
+  apiKey: string;
+  model: string;
+}
 
 export interface AiMessage {
   role: 'user' | 'assistant';
@@ -62,12 +66,11 @@ function toContextMessages(messages: AiMessage[], modelId: string): Message[] {
 }
 
 // Run one completion over the conversation history and return the reply text.
-export async function aiComplete(messages: AiMessage[]): Promise<string> {
-  const [apiKey, modelId] = await Promise.all([aiApiKeyItem.getValue(), aiModelItem.getValue()]);
-  if (!apiKey) throw new Error('NO_API_KEY');
+export async function aiComplete(messages: AiMessage[], config: AiConfig): Promise<string> {
+  if (!config.apiKey) throw new Error('NO_API_KEY');
 
-  const model = (await getModels()).getModel('deepseek', modelId);
-  if (!model) throw new Error(`unknown model: ${modelId}`);
+  const model = (await getModels()).getModel('deepseek', config.model);
+  if (!model) throw new Error(`unknown model: ${config.model}`);
 
   const response: AssistantMessage = await (
     await getModels()
@@ -75,9 +78,9 @@ export async function aiComplete(messages: AiMessage[]): Promise<string> {
     model,
     {
       systemPrompt: SYSTEM_PROMPT,
-      messages: toContextMessages(messages, modelId),
+      messages: toContextMessages(messages, config.model),
     },
-    { apiKey },
+    { apiKey: config.apiKey },
   );
   if (response.stopReason === 'error')
     throw new Error(response.errorMessage ?? 'AI request failed');

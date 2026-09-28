@@ -5,7 +5,7 @@
 import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
 
 import { VocabAccessError, getBucketDir, readBuckets } from '@/lib/fsa';
-import { aiPendingSessionItem } from '@/lib/settings';
+import { aiApiKeyItem, aiModelItem, aiPendingSessionItem } from '@/lib/settings';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
@@ -76,7 +76,6 @@ function errorCode(err: unknown): string {
 // relays them (the SW itself cannot createWritable() or dynamic-import).
 const OFFSCREEN_TYPES = new Set([
   'writeMonthly',
-  'aiChat',
   'loadAiSession',
   'saveAiSession',
   'listMonthly',
@@ -113,6 +112,30 @@ export default defineBackground(() => {
         return { ok: true };
       } catch {
         return { ok: false, error: 'GESTURE' };
+      }
+    }
+    if (type === 'aiChat') {
+      // The offscreen document has no chrome.storage API, so the AI settings
+      // are read here (SW context) and injected into the relayed message.
+      try {
+        const { messages } = (message ?? {}) as { messages?: unknown };
+        if (!Array.isArray(messages)) return { ok: false, error: 'no messages' };
+        const [apiKey, model] = await Promise.all([
+          aiApiKeyItem.getValue(),
+          aiModelItem.getValue(),
+        ]);
+        if (!apiKey) return { ok: false, error: 'NO_API_KEY' };
+        await ensureOffscreenDocument();
+        const result = await browser.runtime.sendMessage({
+          type: 'aiChat',
+          messages,
+          apiKey,
+          model,
+        });
+        if (!result) throw new Error('offscreen did not respond');
+        return result;
+      } catch (err) {
+        return { ok: false, error: errorCode(err) };
       }
     }
     if (type && OFFSCREEN_TYPES.has(type)) {
