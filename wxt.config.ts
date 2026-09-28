@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: 'Vocab Lens',
     description: 'Look up selected words in your local vocabulary buckets',
-    permissions: ['offscreen'],
+    permissions: ['storage', 'offscreen'],
     host_permissions: ['https://api.deepseek.com/*'],
   },
   vite: () => ({
