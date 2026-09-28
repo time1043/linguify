@@ -18,9 +18,8 @@ The user sends an English sentence (or a follow-up question about it).
 For the first message, analyze the sentence in compact plain Chinese text
 using exactly these labels, no markdown syntax:
 【生词】word — 中文释义 (only non-basic words or phrases, one per line; write 无 if none)
-【结构】clause structure: subject / verb / object / modifiers / clauses, brief
-【短语】idioms or fixed expressions, if any (write 无 if none)
-【翻译】natural Chinese translation
+【结构】句子结构分析 (subject / verb / object / modifiers / clauses, brief)
+【短语】习惯用语或固定表达 (write 无 if none)
 For follow-up questions, answer directly and concisely in Chinese.`;
 
 let cachedModels: MutableModels | null = null;

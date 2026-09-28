@@ -52,17 +52,22 @@ from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
 
 - Selection UX: a pin (small dot) appears at the selection's top-left corner.
   Single word → indigo pin → hover opens the lookup card (bucket, position,
-  word, ipa, meaning, forms, TTS). Longer selections → violet pin → CLICK
-  opens the in-page AI sidebar (a fixed right column rendered in the same
-  shadow root; it survives page scroll). Chrome's sidePanel API is NOT used:
-  sidePanel.open() requires a user gesture that content-script messages do
-  not carry, so the pin cannot open a real side panel reliably.
-- AI: DeepSeek via @earendil-works/pi-ai, lazy-imported. All AI calls and
+  word, ipa, meaning, forms, TTS). Longer selections → violet pin → click
+  hands the sentence to the side panel. The toolbar icon always opens the
+  side panel (openPanelOnActionClick); there is no popup. If
+  chrome.sidePanel.open() lacks a usable gesture the sentence stays queued
+  in chrome.storage and is picked up on the next icon click.
+- Side panel tabs: 对话 (AI chat, one session per sentence, pending-session
+  handoff through chrome.storage + storage.watch) and 生词本 (monthly word
+  list, month switcher over user/vocab-monthly/YYYY-MM.json). Panel-top
+  settings cover the directory pick/re-grant and the DeepSeek key/model —
+  there is no separate options page.
+- AI: DeepSeek via @earendil-works/pi-ai (lazy-imported). AI calls and
   AI-session file IO run in the offscreen document (background relays);
   https://api.deepseek.com/* is a host permission so extension-context
   fetches bypass CORS.
 - AI sessions: one conversation per sentence, identity = sha256 of the
   normalized sentence, stored as user/ai-sessions/<slug>-<hash>.json;
   re-selecting a sentence resumes its session.
-- State: jotai atoms for popup/options shared state; plain React state inside
+- State: jotai atoms where shared state exists; plain React state inside
   ephemeral UI (chat, card).

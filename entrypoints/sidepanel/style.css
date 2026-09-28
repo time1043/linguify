@@ -1,6 +1,8 @@
 @import 'tailwindcss';
 
-body {
-  width: 320px;
+html,
+body,
+#root {
+  height: 100%;
   margin: 0;
 }

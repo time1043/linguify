@@ -6,7 +6,7 @@
 import type { AddWordResponse } from '@/lib/types';
 
 import { aiComplete, type AiMessage } from '@/lib/ai';
-import { VocabAccessError, appendMonthly, getBucketDir } from '@/lib/fsa';
+import { VocabAccessError, appendMonthly, getBucketDir, listMonthly, readMonthly } from '@/lib/fsa';
 import { loadSession, saveSession, sessionFileName, type SessionDoc } from '@/lib/sessions';
 
 interface WriteMonthlyMessage {
@@ -31,11 +31,22 @@ interface SaveAiSessionMessage {
   doc: SessionDoc;
 }
 
+interface ListMonthlyMessage {
+  type: 'listMonthly';
+}
+
+interface ReadMonthlyMessage {
+  type: 'readMonthly';
+  month: string;
+}
+
 type OffscreenMessage =
   | WriteMonthlyMessage
   | AiChatMessage
   | LoadAiSessionMessage
-  | SaveAiSessionMessage;
+  | SaveAiSessionMessage
+  | ListMonthlyMessage
+  | ReadMonthlyMessage;
 
 function errorCode(err: unknown): string {
   if (err instanceof VocabAccessError) return err.code;
@@ -75,12 +86,32 @@ async function handle(msg: OffscreenMessage): Promise<unknown> {
       if (!dir) throw new VocabAccessError('NO_DIR');
       return { ok: true, file: await saveSession(dir, msg.doc) };
     }
+    case 'listMonthly': {
+      const dir = await getBucketDir();
+      if (!dir) throw new VocabAccessError('NO_DIR');
+      return { ok: true, months: await listMonthly(dir) };
+    }
+    case 'readMonthly': {
+      const dir = await getBucketDir();
+      if (!dir) throw new VocabAccessError('NO_DIR');
+      return { ok: true, doc: await readMonthly(dir, msg.month) };
+    }
   }
 }
 
 browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   const msg = message as OffscreenMessage | undefined;
-  if (!msg || !['writeMonthly', 'aiChat', 'loadAiSession', 'saveAiSession'].includes(msg.type)) {
+  if (
+    !msg ||
+    ![
+      'writeMonthly',
+      'aiChat',
+      'loadAiSession',
+      'saveAiSession',
+      'listMonthly',
+      'readMonthly',
+    ].includes(msg.type)
+  ) {
     return false;
   }
 

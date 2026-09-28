@@ -23,7 +23,7 @@ export type BucketDirHandle = FileSystemDirectoryHandle & {
 };
 
 // Directory async iteration helpers are also missing from the DOM typings.
-type IterableDirectoryHandle = FileSystemDirectoryHandle & {
+export type IterableDirectoryHandle = FileSystemDirectoryHandle & {
   values(): AsyncIterableIterator<FileSystemDirectoryHandle | FileSystemFileHandle>;
 };
 
@@ -129,4 +129,49 @@ export async function appendMonthly(
     await writable.close();
   }
   return { added: result.added, file: `user/vocab-monthly/${ym}.json` };
+}
+
+// List the recorded monthly files (newest first) with their word counts.
+export async function listMonthly(
+  dir: BucketDirHandle,
+): Promise<{ name: string; count: number }[]> {
+  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
+  const monthlyDir = userDir
+    ? await userDir.getDirectoryHandle('vocab-monthly').catch(() => null)
+    : null;
+  if (!monthlyDir) return [];
+  const months: { name: string; count: number }[] = [];
+  for await (const entry of (monthlyDir as IterableDirectoryHandle).values()) {
+    if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+    try {
+      const parsed = JSON.parse(
+        await (await (entry as FileSystemFileHandle).getFile()).text(),
+      ) as MonthlyDoc;
+      if (Array.isArray(parsed?.words)) {
+        months.push({
+          name: String(parsed.name ?? entry.name.replace(/\.json$/, '')),
+          count: parsed.words.length,
+        });
+      }
+    } catch {
+      // Skip malformed month files.
+    }
+  }
+  return months.sort((a, b) => b.name.localeCompare(a.name));
+}
+
+// Read one monthly document by month key (e.g. "2026-09"); null when the
+// file does not exist yet.
+export async function readMonthly(dir: BucketDirHandle, month: string): Promise<MonthlyDoc | null> {
+  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
+  const monthlyDir = userDir
+    ? await userDir.getDirectoryHandle('vocab-monthly').catch(() => null)
+    : null;
+  if (!monthlyDir) return null;
+  try {
+    const file = await monthlyDir.getFileHandle(`${month}.json`);
+    return JSON.parse(await (await file.getFile()).text()) as MonthlyDoc;
+  } catch {
+    return null;
+  }
 }

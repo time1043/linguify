@@ -5,6 +5,7 @@
 import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
 
 import { VocabAccessError, getBucketDir, readBuckets } from '@/lib/fsa';
+import { aiPendingSessionItem } from '@/lib/settings';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
@@ -73,11 +74,47 @@ function errorCode(err: unknown): string {
 
 // Message types handled by the offscreen document; the service worker only
 // relays them (the SW itself cannot createWritable() or dynamic-import).
-const OFFSCREEN_TYPES = new Set(['writeMonthly', 'aiChat', 'loadAiSession', 'saveAiSession']);
+const OFFSCREEN_TYPES = new Set([
+  'writeMonthly',
+  'aiChat',
+  'loadAiSession',
+  'saveAiSession',
+  'listMonthly',
+  'readMonthly',
+]);
 
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener(async (message: unknown): Promise<unknown> => {
+  // Clicking the toolbar icon opens the side panel — the panel hosts the
+  // settings (directory, API key) and both feature tabs.
+  const sidePanel = (
+    browser as unknown as {
+      sidePanel?: {
+        setPanelBehavior(options: { openPanelOnActionClick: boolean }): Promise<void>;
+        open(options: { tabId: number }): Promise<void>;
+      };
+    }
+  ).sidePanel;
+  void sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
+
+  browser.runtime.onMessage.addListener(async (message: unknown, sender): Promise<unknown> => {
     const { type } = (message ?? {}) as { type?: string };
+    if (type === 'openAiPanel') {
+      // The violet pin hands its sentence over and asks for the panel. When
+      // Chrome refuses the gesture the sentence stays queued; the next icon
+      // click opens the panel and the storage watcher picks it up.
+      try {
+        const { sentence, url } = (message ?? {}) as { sentence?: string; url?: string };
+        if (!sentence) return { ok: false, error: 'no sentence' };
+        await aiPendingSessionItem.setValue({ sentence, url: url ?? '', ts: Date.now() });
+        if (!sidePanel) throw new Error('side panel unavailable');
+        const tabId = (sender as { tab?: { id?: number } } | undefined)?.tab?.id;
+        if (tabId == null) throw new Error('sender tab unknown');
+        await sidePanel.open({ tabId });
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'GESTURE' };
+      }
+    }
     if (type && OFFSCREEN_TYPES.has(type)) {
       try {
         await ensureOffscreenDocument();
