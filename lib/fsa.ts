@@ -17,7 +17,7 @@ import {
 const BUCKET_DIR_KEY = 'bucketDirHandle';
 
 // Chrome-specific permission methods are not in the default DOM typings.
-type BucketDirHandle = FileSystemDirectoryHandle & {
+export type BucketDirHandle = FileSystemDirectoryHandle & {
   queryPermission(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
   requestPermission(options: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
 };
