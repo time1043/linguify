@@ -52,18 +52,17 @@ from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
 
 - Selection UX: a pin (small dot) appears at the selection's top-left corner.
   Single word → indigo pin → hover opens the lookup card (bucket, position,
-  word, ipa, meaning, forms, TTS). Longer selections → violet pin → opens the
-  AI side panel (sentence analysis, follow-ups via DeepSeek through
-  `@earendil-works/pi-ai`).
-- File System Access: the directory handle lives in IndexedDB. Reads run in
-  the service worker; writes must go through a windowed context because
-  `createWritable()` is unavailable in MV3 service workers — monthly writes
-  are delegated to an offscreen document, session writes happen directly in
-  the side panel.
-- Side panel handoff: the content script stores a pending session in
-  `chrome.storage` and calls `chrome.sidePanel.open()`; if Chrome refuses the
-  gesture, the popup shows an 「AI 分析」 button (clicking the toolbar icon
-  always opens the popup, never the panel). The panel watches storage and
-  picks up the pending session either way.
+  word, ipa, meaning, forms, TTS). Longer selections → violet pin → CLICK
+  opens the in-page AI sidebar (a fixed right column rendered in the same
+  shadow root; it survives page scroll). Chrome's sidePanel API is NOT used:
+  sidePanel.open() requires a user gesture that content-script messages do
+  not carry, so the pin cannot open a real side panel reliably.
+- AI: DeepSeek via @earendil-works/pi-ai, lazy-imported. All AI calls and
+  AI-session file IO run in the offscreen document (background relays);
+  https://api.deepseek.com/* is a host permission so extension-context
+  fetches bypass CORS.
+- AI sessions: one conversation per sentence, identity = sha256 of the
+  normalized sentence, stored as user/ai-sessions/<slug>-<hash>.json;
+  re-selecting a sentence resumes its session.
 - State: jotai atoms for popup/options shared state; plain React state inside
   ephemeral UI (chat, card).

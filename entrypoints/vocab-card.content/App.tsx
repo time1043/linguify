@@ -4,6 +4,7 @@ import type { AddWordResponse, LookupHit, LookupResponse } from '@/lib/types';
 
 import { normalizeWord } from '@/lib/vocab';
 
+import AiSidebar from './AiSidebar';
 import Card, {
   type AddState,
   type CardStatus,
@@ -121,7 +122,9 @@ export default function App() {
   const [state, setState] = useState<State | null>(null);
   const [addState, setAddState] = useState<AddState>('idle');
   const [addError, setAddError] = useState('');
-  const [pinHint, setPinHint] = useState('');
+  // The sentence currently open in the in-page AI sidebar (independent of the
+  // pin, so scrolling the page does not close it).
+  const [aiTarget, setAiTarget] = useState<{ sentence: string; url: string } | null>(null);
   const requestId = useRef(0);
 
   // Runs when the pin is activated — the selection alone never triggers
@@ -175,25 +178,11 @@ export default function App() {
     setState((prev) => (prev ? { ...prev, cardOpen: false } : prev));
   }, []);
 
-  // Sentence selections open the AI side panel instead of the word card.
-  const openAiPanel = useCallback(async () => {
+  // Sentence selections open the in-page AI sidebar on click (no hover — the
+  // sidebar is too large to pop open accidentally).
+  const openAiSidebar = useCallback(() => {
     if (!state?.selection) return;
-    setPinHint('');
-    try {
-      const response = (await browser.runtime.sendMessage({
-        type: 'openAiPanel',
-        sentence: state.selection.sentence,
-        url: state.selection.url,
-      })) as { ok?: boolean };
-      if (response?.ok) {
-        // The side panel took over; the pin goes away.
-        setState(null);
-        return;
-      }
-      setPinHint('在插件弹窗中点击「AI 分析」打开');
-    } catch {
-      setPinHint('在插件弹窗中点击「AI 分析」打开');
-    }
+    setAiTarget({ sentence: state.selection.sentence, url: state.selection.url });
   }, [state]);
 
   const addWord = useCallback(async () => {
@@ -238,8 +227,13 @@ export default function App() {
       }, SELECTION_DEBOUNCE_MS);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dismiss();
+      if (event.key === 'Escape') {
+        setAiTarget(null);
+        dismiss();
+      }
     };
+    // Scrolling invalidates the pin/card, but an open AI sidebar survives —
+    // it is anchored to the viewport, not to the selection.
     const onScroll = () => dismiss();
 
     document.addEventListener('selectionchange', onSelectionChange);
@@ -253,25 +247,37 @@ export default function App() {
     };
   }, []);
 
-  return state ? (
-    <WordPin
-      selection={state.selection}
-      tone={state.selection.kind}
-      hint={pinHint}
-      active={state.selection.kind === 'word' && state.cardOpen}
-      onActivate={state.selection.kind === 'word' ? openCard : () => void openAiPanel()}
-      onDeactivate={closeCard}
-    >
-      <Card
-        selection={state.selection}
-        status={state.status}
-        hit={state.hit}
-        errorText={state.errorText}
-        addState={addState}
-        addError={addError}
-        onAdd={() => void addWord()}
-        onSpeak={() => speakWord(state.selection.word ?? '')}
-      />
-    </WordPin>
-  ) : null;
+  return (
+    <>
+      {state && (
+        <WordPin
+          selection={state.selection}
+          tone={state.selection.kind}
+          active={state.selection.kind === 'word' && state.cardOpen}
+          activateOnHover={state.selection.kind === 'word'}
+          onActivate={state.selection.kind === 'word' ? openCard : openAiSidebar}
+          onDeactivate={closeCard}
+        >
+          <Card
+            selection={state.selection}
+            status={state.status}
+            hit={state.hit}
+            errorText={state.errorText}
+            addState={addState}
+            addError={addError}
+            onAdd={() => void addWord()}
+            onSpeak={() => speakWord(state.selection.word ?? '')}
+          />
+        </WordPin>
+      )}
+      {aiTarget && (
+        <AiSidebar
+          key={`${aiTarget.sentence}:${aiTarget.url}`}
+          sentence={aiTarget.sentence}
+          url={aiTarget.url}
+          onClose={() => setAiTarget(null)}
+        />
+      )}
+    </>
+  );
 }

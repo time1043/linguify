@@ -5,7 +5,6 @@
 import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/types';
 
 import { VocabAccessError, getBucketDir, readBuckets } from '@/lib/fsa';
-import { aiPendingSessionItem } from '@/lib/settings';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
@@ -24,7 +23,7 @@ async function ensureOffscreenDocument(): Promise<void> {
   await offscreen.createDocument({
     url: browser.runtime.getURL('/offscreen.html'),
     reasons: ['BLOBS'],
-    justification: 'Write monthly vocabulary files via the File System Access API',
+    justification: 'Write vocabulary files and run AI calls in a windowed context',
   });
 }
 
@@ -72,31 +71,24 @@ function errorCode(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+// Message types handled by the offscreen document; the service worker only
+// relays them (the SW itself cannot createWritable() or dynamic-import).
+const OFFSCREEN_TYPES = new Set(['writeMonthly', 'aiChat', 'loadAiSession', 'saveAiSession']);
+
 export default defineBackground(() => {
-  browser.runtime.onMessage.addListener(async (message: unknown, sender): Promise<unknown> => {
+  browser.runtime.onMessage.addListener(async (message: unknown): Promise<unknown> => {
     const { type } = (message ?? {}) as { type?: string };
-    switch (type) {
-      case 'openAiPanel': {
-        try {
-          const { sentence, url } = (message ?? {}) as { sentence?: string; url?: string };
-          if (!sentence) return { ok: false, error: 'no sentence' };
-          await aiPendingSessionItem.setValue({ sentence, url: url ?? '', ts: Date.now() });
-          const sidePanel = (
-            browser as unknown as {
-              sidePanel?: { open(options: { tabId: number }): Promise<void> };
-            }
-          ).sidePanel;
-          if (!sidePanel) throw new Error('side panel unavailable');
-          const tabId = (sender as { tab?: { id?: number } } | undefined)?.tab?.id;
-          if (tabId == null) throw new Error('sender tab unknown');
-          await sidePanel.open({ tabId });
-          return { ok: true };
-        } catch {
-          // Without a usable gesture the popup's 「AI 分析」 button opens the
-          // panel; the pending session is already stored for the panel.
-          return { ok: false, error: 'GESTURE' };
-        }
+    if (type && OFFSCREEN_TYPES.has(type)) {
+      try {
+        await ensureOffscreenDocument();
+        const result = await browser.runtime.sendMessage(message);
+        if (!result) throw new Error('offscreen did not respond');
+        return result;
+      } catch (err) {
+        return { ok: false, error: errorCode(err) };
       }
+    }
+    switch (type) {
       case 'lookup': {
         try {
           const { word } = message as { word: string };

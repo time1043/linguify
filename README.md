@@ -10,20 +10,19 @@ File System Access API.
 ## Layout
 
 - `entrypoints/background.ts` — service worker: bucket cache (60 s TTL),
-  file reads, side panel opening.
+  bucket reads, message relay to the offscreen document.
 - `entrypoints/vocab-card.content/` — selection pin: single words open the
   shadow-root lookup card (bucket, position, word, ipa, meaning, forms, TTS,
-  one click adds to the monthly file); longer selections open the AI panel.
-- `entrypoints/sidepanel/` — AI sentence analysis chat (DeepSeek); follow-ups
-  supported; one session per sentence, persisted under `user/ai-sessions/`.
-- `entrypoints/offscreen/` — windowed context that performs monthly-file
-  writes (`createWritable()` is unavailable in service workers).
+  one click adds to the monthly file); longer selections open the in-page AI
+  sidebar (`AiSidebar.tsx`, a fixed right column in the same shadow root).
+- `entrypoints/offscreen/` — windowed context for what the service worker
+  cannot do: `createWritable()` file writes and the lazy-loaded pi-ai SDK.
 - `entrypoints/popup/` — directory status and vocab stats.
 - `entrypoints/options/` — directory pick, file-access re-grant, DeepSeek API
   key and model.
 - `lib/vocab.ts` — pure lookup index (headwords + first token of each form).
 - `lib/monthly.ts` — pure monthly-file merge logic (dedupe, position, `from`
-  provenance).
+  provenance, `examples` accumulation).
 - `lib/sessions.ts` — AI session identity (sentence hash) and persistence.
 - `lib/ai.ts` — pi-ai integration (DeepSeek, analysis system prompt).
 - `lib/fsa.ts` — File System Access layer (directory pick, permission,
@@ -57,11 +56,11 @@ select `.output/chrome-mv3`.
    when not found) and `examples: [{ sentence, url }]`. Meeting the same word
    again appends the new example; identical examples are skipped.
 3. Select a whole sentence (anything longer than a word) — a violet dot
-   appears; hovering it opens the AI side panel, analyzes the sentence
-   (vocabulary, structure, idioms, translation) and answers follow-up
-   questions. One session per sentence, saved to `user/ai-sessions/`;
-   re-selecting the same sentence resumes that session. Requires a DeepSeek
-   API key in the options page.
+   appears; clicking it opens the in-page AI sidebar on the right, which
+   analyzes the sentence (vocabulary, structure, idioms, translation) and
+   answers follow-up questions. One session per sentence, saved to
+   `user/ai-sessions/`; re-selecting the same sentence resumes that session.
+   Requires a DeepSeek API key in the options page.
 
 ## Development
 

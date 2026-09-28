@@ -8,6 +8,7 @@ export default defineConfig({
     name: 'Vocab Lens',
     description: 'Look up selected words in your local vocabulary buckets',
     permissions: ['offscreen'],
+    host_permissions: ['https://api.deepseek.com/*'],
   },
   vite: () => ({
     plugins: [tailwindcss()],

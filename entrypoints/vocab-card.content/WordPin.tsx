@@ -4,11 +4,14 @@ import type { SelectionContext, SelectionKind } from './Card';
 
 interface WordPinProps {
   selection: SelectionContext;
-  // 'word' pins open the lookup card, 'ai' pins open the AI side panel.
+  // 'word' pins open the lookup card, 'sentence' pins open the AI sidebar.
   tone: SelectionKind;
-  // Overrides the dot tooltip, e.g. when the side panel failed to open.
+  // Overrides the dot tooltip.
   hint?: string;
   active: boolean;
+  // Word pins open on hover; sentence pins wait for a click (the AI sidebar
+  // is too large to pop open on an accidental hover).
+  activateOnHover?: boolean;
   onActivate: () => void;
   onDeactivate: () => void;
   children?: ReactNode;
@@ -27,6 +30,7 @@ export default function WordPin({
   tone,
   hint,
   active,
+  activateOnHover = true,
   onActivate,
   onDeactivate,
   children,
@@ -39,7 +43,7 @@ export default function WordPin({
   const spaceBelow = window.innerHeight - top - PIN_SIZE - 16;
   const placeAbove = spaceBelow < 180;
   const maxHeight = placeAbove ? top - 16 : spaceBelow;
-  const label = hint ?? (tone === 'sentence' ? 'AI 分析句子' : '查看释义');
+  const label = hint ?? (tone === 'sentence' ? 'AI 分析句子（点击）' : '查看释义');
 
   return (
     <div
@@ -54,7 +58,7 @@ export default function WordPin({
         type="button"
         aria-label={label}
         title={label}
-        onMouseEnter={onActivate}
+        onMouseEnter={activateOnHover ? onActivate : undefined}
         onClick={onActivate}
         className={`h-5 w-5 rounded-full shadow-lg ring-2 ring-white transition-transform hover:scale-110 ${
           tone === 'sentence' ? 'bg-violet-600' : 'bg-indigo-600'
