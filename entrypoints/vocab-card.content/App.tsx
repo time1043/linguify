@@ -209,6 +209,8 @@ export default function App() {
       if (response?.error) {
         setAddState('error');
         setAddError(describeAddError(response.error));
+      } else if (response?.added && response?.reason === 'example-appended') {
+        setAddState('appended');
       } else {
         setAddState(response?.added ? 'added' : 'exists');
       }

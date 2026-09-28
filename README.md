@@ -54,7 +54,8 @@ select `.output/chrome-mv3`.
    position, the word, ipa, meaning and forms; unmatched words show 没查到.
 2. Click 加入月度 — the word is appended to `user/vocab-monthly/YYYY-MM.json`
    with `from` (dictionary provenance, e.g. `free-nmet/2050.json#970`, null
-   when not found) and `example: { sentence, url }`; duplicates are skipped.
+   when not found) and `examples: [{ sentence, url }]`. Meeting the same word
+   again appends the new example; identical examples are skipped.
 3. Select a whole sentence (anything longer than a word) — a violet dot
    appears; hovering it opens the AI side panel, analyzes the sentence
    (vocabulary, structure, idioms, translation) and answers follow-up

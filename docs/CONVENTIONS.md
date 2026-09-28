@@ -37,10 +37,12 @@ meaning, forms }] }`. Forms look like `"changed v."`; the lookup key is the
   first token.
 - `user/` — user-generated data, written by the extension:
   - `user/vocab-monthly/YYYY-MM.json` → `{ name, words: [{ position, word,
-from, example: { sentence, url } }] }`. `from` is dictionary provenance
+from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
     (`"<path-relative-to-data>#<position>"`, e.g. `free-nmet/2050.json#970`)
-    or `null`. Duplicates are skipped (case-insensitive); position is
-    max(existing) + 1.
+    or `null`. Words are deduped case-insensitively; when a word already
+    exists its new example is appended to `examples` unless that exact
+    sentence+url is recorded already; position is max(existing) + 1. Legacy
+    entries with a single `example` field are migrated on the next append.
   - `user/ai-sessions/<slug>-<hash>.json` → one AI conversation per sentence;
     the hash is derived from the normalized sentence, so re-selecting the
     same sentence resumes the same session.
