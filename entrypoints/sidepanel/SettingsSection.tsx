@@ -29,6 +29,15 @@ export default function SettingsSection() {
     setTimeout(() => setSaved(false), 1500);
   }, [apiKey, model]);
 
+  // Auto-save while typing (debounced) so a missed button click can never
+  // leave the key unsaved.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void aiApiKeyItem.setValue(apiKey.trim());
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [apiKey]);
+
   return (
     <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 text-xs text-zinc-700">
       <div className="flex items-center gap-2">

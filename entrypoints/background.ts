@@ -124,6 +124,13 @@ export default defineBackground(() => {
           aiApiKeyItem.getValue(),
           aiModelItem.getValue(),
         ]);
+        // Debug aid: shows in the pnpm dev terminal whether the key reached
+        // the background (masked, never the full key).
+        console.log(
+          `[aiChat] api key from storage: ${
+            apiKey ? `${apiKey.slice(0, 6)}…${apiKey.slice(-4)} (len ${apiKey.length})` : '(EMPTY)'
+          }, model: ${model}`,
+        );
         if (!apiKey) return { ok: false, error: 'NO_API_KEY' };
         await ensureOffscreenDocument();
         const result = await browser.runtime.sendMessage({
