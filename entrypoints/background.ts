@@ -98,6 +98,7 @@ const OFFSCREEN_TYPES = new Set([
   'writeMonthly',
   'loadAiSession',
   'saveAiSession',
+  'listAiSessions',
   'listMonthly',
   'readMonthly',
 ]);
