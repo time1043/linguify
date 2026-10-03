@@ -124,7 +124,7 @@ export default function SettingsSection() {
       >
         {saved ? '✓ 已保存' : '保存 Key'}
       </button>
-      <p className="mt-1.5 font-mono text-[10px] text-zinc-400">扩展实例: {chrome.runtime.id}</p>
+      <p className="mt-1.5 font-mono text-[10px] text-zinc-400">扩展实例: {browser.runtime.id}</p>
     </div>
   );
 }

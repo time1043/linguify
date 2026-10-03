@@ -135,7 +135,7 @@ export default defineBackground(() => {
         if (!apiKey)
           return {
             ok: false,
-            error: `NO_API_KEY（后台读到 Key: ${masked}｜storage 现有键: ${storedKeys}｜处理实例: ${chrome.runtime.id}）`,
+            error: `NO_API_KEY（后台读到 Key: ${masked}｜storage 现有键: ${storedKeys}｜处理实例: ${browser.runtime.id}）`,
           };
         await ensureOffscreenDocument();
         const result = await browser.runtime.sendMessage({
