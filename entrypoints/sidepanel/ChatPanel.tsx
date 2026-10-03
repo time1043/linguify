@@ -134,6 +134,7 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
       }
     })();
     // New sentence selections arrive while the panel is already open.
+    // The API-key banner clears live as soon as a key is saved in settings.
     return aiPendingSessionItem.watch((pending) => {
       if (pending && Date.now() - pending.ts < PENDING_MAX_AGE_MS) {
         onPending?.();
@@ -141,6 +142,14 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
       }
     });
   }, []);
+
+  useEffect(
+    () =>
+      aiApiKeyItem.watch((key) => {
+        setNoApiKey(!key);
+      }),
+    [],
+  );
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
