@@ -222,6 +222,9 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
   };
 
   const busy = status === 'analyzing' || status === 'loading';
+  // Where the analyzed sentence came from — shown under the first message,
+  // the same way the vocab list shows example source links.
+  const sourceUrl = docRef.current?.source.url ?? '';
 
   const query_ = query.trim().toLowerCase();
   const filtered = (items ?? []).filter(
@@ -267,6 +270,11 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
               className="block w-full rounded-xl border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-indigo-300"
             >
               <p className="line-clamp-2 text-xs font-medium text-zinc-900">{s.source.sentence}</p>
+              {s.source.url && (
+                <span className="mt-1 block truncate text-[10px] text-indigo-500">
+                  {s.source.url}
+                </span>
+              )}
               <p className="mt-1 text-[10px] text-zinc-400">
                 {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} 条消息
               </p>
@@ -306,10 +314,20 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
         )}
         {messages.map((m, i) =>
           m.role === 'user' ? (
-            <div key={i} className="flex justify-end">
+            <div key={i} className="flex flex-col items-end">
               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-3 py-2 text-xs leading-relaxed text-white">
                 {m.content}
               </div>
+              {i === 0 && sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-0.5 max-w-[85%] truncate text-[10px] text-indigo-400 hover:underline"
+                >
+                  {sourceUrl}
+                </a>
+              )}
             </div>
           ) : (
             <div key={i} className="flex justify-start">
