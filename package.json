@@ -17,6 +17,7 @@
     "zip:firefox": "wxt zip -b firefox"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.87.1",
     "@tailwindcss/vite": "^4.3.3",
     "idb-keyval": "^6.3.0",
     "jotai": "^3.0.0",

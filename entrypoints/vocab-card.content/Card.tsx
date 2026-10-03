@@ -1,14 +1,19 @@
 import type { LookupHit } from '@/lib/types';
 
+export type SelectionKind = 'word' | 'sentence';
+
 export interface SelectionContext {
-  word: string;
+  kind: SelectionKind;
+  // Headword for word selections; absent for sentence selections.
+  word?: string;
   rect: { top: number; left: number; right: number; bottom: number };
+  // Enclosing sentence (word selections) or the analyzed text (sentences).
   sentence: string;
   url: string;
 }
 
 export type CardStatus = 'pending' | 'found' | 'missing' | 'error';
-export type AddState = 'idle' | 'adding' | 'added' | 'exists' | 'error';
+export type AddState = 'idle' | 'adding' | 'added' | 'appended' | 'exists' | 'error';
 
 interface CardProps {
   selection: SelectionContext;
@@ -25,6 +30,7 @@ const ADD_LABELS: Record<AddState, string> = {
   idle: '加入月度',
   adding: '添加中…',
   added: '✓ 已加入',
+  appended: '✓ 例句已补充',
   exists: '已在月度中',
   error: '添加失败，重试',
 };
@@ -33,6 +39,7 @@ const ADD_CLASSES: Record<AddState, string> = {
   idle: 'bg-indigo-600 text-white hover:bg-indigo-500',
   adding: 'bg-indigo-300 text-white',
   added: 'bg-green-100 text-green-700',
+  appended: 'bg-green-100 text-green-700',
   exists: 'bg-zinc-100 text-zinc-500',
   error: 'bg-red-100 text-red-700 hover:bg-red-200',
 };
