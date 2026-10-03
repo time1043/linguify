@@ -26,6 +26,26 @@ async function ensureOffscreenDocument(): Promise<void> {
     reasons: ['BLOBS'],
     justification: 'Write vocabulary files and run AI calls in a windowed context',
   });
+  // createDocument resolves before the offscreen page's scripts have
+  // registered their onMessage listeners — give it a moment, otherwise the
+  // first relayed message resolves with null ("no listener responded").
+  await sleep(300);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+// Relay a message to the offscreen document, retrying briefly while the
+// freshly created document finishes booting.
+async function relayToOffscreen(message: unknown): Promise<unknown> {
+  await ensureOffscreenDocument();
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const result = await browser.runtime.sendMessage(message);
+    if (result) return result;
+    await sleep(400);
+  }
+  throw new Error('offscreen did not respond');
 }
 
 interface VocabCache {
@@ -114,9 +134,10 @@ export default defineBackground(() => {
         return { ok: false, error: 'GESTURE' };
       }
     }
-    if (type === 'aiChat') {
-      // The offscreen document has no chrome.storage API, so the AI settings
-      // are read here (SW context) and injected into the relayed message.
+    if (type === 'aiChatRequest') {
+      // The side panel asks for a completion. The offscreen document has no
+      // chrome.storage API, so the AI settings are read here (SW context)
+      // and injected into the relayed 'aiChat' message.
       try {
         const { messages } = (message ?? {}) as { messages?: unknown };
         if (!Array.isArray(messages)) return { ok: false, error: 'no messages' };
@@ -137,14 +158,12 @@ export default defineBackground(() => {
             ok: false,
             error: `NO_API_KEY（后台读到 Key: ${masked}｜storage 现有键: ${storedKeys}｜处理实例: ${browser.runtime.id}）`,
           };
-        await ensureOffscreenDocument();
-        const result = await browser.runtime.sendMessage({
+        const result = await relayToOffscreen({
           type: 'aiChat',
           messages,
           apiKey,
           model,
         });
-        if (!result) throw new Error('offscreen did not respond');
         return result;
       } catch (err) {
         return { ok: false, error: errorCode(err) };
@@ -152,9 +171,7 @@ export default defineBackground(() => {
     }
     if (type && OFFSCREEN_TYPES.has(type)) {
       try {
-        await ensureOffscreenDocument();
-        const result = await browser.runtime.sendMessage(message);
-        if (!result) throw new Error('offscreen did not respond');
+        const result = await relayToOffscreen(message);
         return result;
       } catch (err) {
         return { ok: false, error: errorCode(err) };
@@ -193,14 +210,12 @@ export default defineBackground(() => {
           } catch {
             // Provenance is best-effort.
           }
-          await ensureOffscreenDocument();
-          const result = (await browser.runtime.sendMessage({
+          const result = (await relayToOffscreen({
             type: 'writeMonthly',
             word: normalizeWord(word) ?? word,
             from,
             example,
-          })) as AddWordResponse | undefined;
-          if (!result) throw new Error('offscreen write did not respond');
+          })) as AddWordResponse;
           return result;
         } catch (err) {
           return { ok: false, error: errorCode(err) } satisfies AddWordResponse;

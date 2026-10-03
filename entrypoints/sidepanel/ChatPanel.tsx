@@ -50,8 +50,12 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
       setError('');
       let failed = false;
       try {
+        // 'aiChatRequest' is handled ONLY by the background worker (which
+        // injects the API key/model and relays an 'aiChat' message to the
+        // offscreen document) — broadcasting 'aiChat' itself would let the
+        // offscreen answer without the key.
         const { text } = await callOffscreen<{ text: string }>({
-          type: 'aiChat',
+          type: 'aiChatRequest',
           messages: history,
         });
         doc.messages = [...history, { role: 'assistant', content: text }];
