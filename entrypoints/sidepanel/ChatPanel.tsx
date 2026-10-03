@@ -41,11 +41,10 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
     }
   }, []);
 
-  const runTurn = useCallback(
-    async (userContent: string) => {
-      const doc = docRef.current;
-      if (!doc) return;
-      const history: SessionMessage[] = [...doc.messages, { role: 'user', content: userContent }];
+  // Shared tail of every turn: call the AI over the given history, append
+  // the reply (or keep the dangling user message on failure), persist.
+  const completeTurn = useCallback(
+    async (doc: SessionDoc, history: SessionMessage[]) => {
       setMessages(history);
       setStatus('analyzing');
       setError('');
@@ -71,6 +70,15 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
     [persist],
   );
 
+  const runTurn = useCallback(
+    async (userContent: string) => {
+      const doc = docRef.current;
+      if (!doc) return;
+      await completeTurn(doc, [...doc.messages, { role: 'user', content: userContent }]);
+    },
+    [completeTurn],
+  );
+
   const startSession = useCallback(
     async (pending: PendingAiSession) => {
       setStatus('loading');
@@ -84,8 +92,18 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
         if (dir.doc) {
           docRef.current = dir.doc;
           setMessages(dir.doc.messages);
-          setStatus('ready');
-          setSaveNote(`已加载历史会话（${dir.doc.messages.length} 条消息）`);
+          const last = dir.doc.messages.at(-1);
+          if (!last || last.role === 'user') {
+            // A turn was left unanswered (e.g. the earlier attempt failed) —
+            // finish it now instead of showing a dead conversation.
+            const history = dir.doc.messages.length
+              ? dir.doc.messages
+              : [{ role: 'user' as const, content: pending.sentence }];
+            await completeTurn(dir.doc, history);
+          } else {
+            setStatus('ready');
+            setSaveNote(`已加载历史会话（${dir.doc.messages.length} 条消息）`);
+          }
           return;
         }
         docRef.current = {
@@ -103,7 +121,7 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
         setError(describeAiError(err));
       }
     },
-    [runTurn],
+    [completeTurn, runTurn],
   );
 
   useEffect(() => {
