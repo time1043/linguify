@@ -124,14 +124,19 @@ export default defineBackground(() => {
           aiApiKeyItem.getValue(),
           aiModelItem.getValue(),
         ]);
-        // Debug aid: shows in the pnpm dev terminal whether the key reached
-        // the background (masked, never the full key).
-        console.log(
-          `[aiChat] api key from storage: ${
-            apiKey ? `${apiKey.slice(0, 6)}…${apiKey.slice(-4)} (len ${apiKey.length})` : '(EMPTY)'
-          }, model: ${model}`,
-        );
-        if (!apiKey) return { ok: false, error: 'NO_API_KEY' };
+        // Debug aid (temporary): the panel shows this in the error text, so
+        // the user can report what the background actually read — no devtools
+        // or terminal needed.
+        const storedKeys = Object.keys(await browser.storage.local.get(null)).join(', ');
+        const masked = apiKey
+          ? `${apiKey.slice(0, 6)}…${apiKey.slice(-4)} (len ${apiKey.length})`
+          : '(EMPTY)';
+        console.log(`[aiChat] key=${masked} model=${model} storage=[${storedKeys}]`);
+        if (!apiKey)
+          return {
+            ok: false,
+            error: `NO_API_KEY（后台读到 Key: ${masked}｜storage 现有键: ${storedKeys}）`,
+          };
         await ensureOffscreenDocument();
         const result = await browser.runtime.sendMessage({
           type: 'aiChat',
