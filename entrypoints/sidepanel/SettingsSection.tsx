@@ -14,11 +14,15 @@ export default function SettingsSection() {
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState<string>(DEFAULT_AI_MODEL);
   const [saved, setSaved] = useState(false);
+  // Guards the auto-save: until the stored value has loaded, the local state
+  // is still the initial '' — writing it would wipe the saved key.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     void (async () => {
       setApiKey(await aiApiKeyItem.getValue());
       setModel(await aiModelItem.getValue());
+      setLoaded(true);
     })();
   }, []);
 
@@ -32,11 +36,12 @@ export default function SettingsSection() {
   // Auto-save while typing (debounced) so a missed button click can never
   // leave the key unsaved.
   useEffect(() => {
+    if (!loaded) return;
     const timer = setTimeout(() => {
       void aiApiKeyItem.setValue(apiKey.trim());
     }, 500);
     return () => clearTimeout(timer);
-  }, [apiKey]);
+  }, [apiKey, loaded]);
 
   return (
     <div className="border-b border-zinc-200 bg-zinc-50 px-3 py-3 text-xs text-zinc-700">
@@ -119,6 +124,7 @@ export default function SettingsSection() {
       >
         {saved ? '✓ 已保存' : '保存 Key'}
       </button>
+      <p className="mt-1.5 font-mono text-[10px] text-zinc-400">扩展实例: {chrome.runtime.id}</p>
     </div>
   );
 }
