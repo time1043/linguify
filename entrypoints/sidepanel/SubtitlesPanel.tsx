@@ -28,15 +28,21 @@ export default function SubtitlesPanel() {
   const [result, setResult] = useState<SubsResult | null>(null);
   const [tabId, setTabId] = useState<number | null>(null);
   const [tabUrl, setTabUrl] = useState('');
+  // Only the latest load() may update the result — concurrent fetches (tab
+  // navigation + manual refresh) would otherwise race and land out of order.
+  const requestId = useRef(0);
 
   const load = useCallback(async () => {
+    const id = ++requestId.current;
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     setTabId(tab?.id ?? null);
     const url = tab?.url ?? '';
     setTabUrl(url);
     if (!detectPlatform(url)) {
-      setStatus('idle');
-      setResult(null);
+      if (id === requestId.current) {
+        setStatus('idle');
+        setResult(null);
+      }
       return;
     }
     setStatus('loading');
@@ -45,10 +51,12 @@ export default function SubtitlesPanel() {
       const r = (await browser.runtime.sendMessage({ type: 'fetchSubtitles', url, tabId })) as
         | (SubsResult & { ok?: boolean; error?: string })
         | undefined;
+      if (id !== requestId.current) return; // a newer load superseded this one
       if (!r?.ok) throw new Error(r?.error ?? 'no response');
       setResult({ ...r, url });
       setStatus('ready');
     } catch (err) {
+      if (id !== requestId.current) return;
       setStatus('error');
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -61,7 +69,16 @@ export default function SubtitlesPanel() {
       if (id === tabId && info.url && info.url !== tabUrl) void load();
     };
     browser.tabs.onUpdated.addListener(onUpdated);
-    return () => browser.tabs.onUpdated.removeListener(onUpdated);
+    // Re-fetch when the user switches to another tab (the panel always
+    // mirrors the currently watched video).
+    const onActivated = (info: { tabId: number }) => {
+      if (info.tabId !== tabId) void load();
+    };
+    browser.tabs.onActivated.addListener(onActivated);
+    return () => {
+      browser.tabs.onUpdated.removeListener(onUpdated);
+      browser.tabs.onActivated.removeListener(onActivated);
+    };
   }, [load, tabId, tabUrl]);
 
   const seek = async (start: number) => {
@@ -84,6 +101,11 @@ export default function SubtitlesPanel() {
   };
 
   const detected = tabUrl ? detectPlatform(tabUrl) : null;
+
+  // Dev aid: makes a stale/mismatched fetch immediately visible.
+  const targetLabel = detected
+    ? `${PLATFORM_LABEL[detected.platform]} · ${tabUrl.replace(/^https?:\/\/(www\.)?/, '').slice(0, 40)}`
+    : tabUrl;
 
   return (
     <div className="flex h-full flex-col">
@@ -116,6 +138,7 @@ export default function SubtitlesPanel() {
                 {PLATFORM_LABEL[result.platform]} · {result.lang || '未知语言'} ·{' '}
                 {result.lines.length} 条字幕 （点击行跳转视频）
               </p>
+              <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-400">{targetLabel}</p>
             </div>
             <div className="space-y-0.5">
               {result.lines.map((line, i) => (
