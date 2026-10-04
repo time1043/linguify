@@ -2,9 +2,10 @@ import { useState } from 'react';
 
 import ChatPanel from './ChatPanel';
 import SettingsSection from './SettingsSection';
+import SubtitlesPanel from './SubtitlesPanel';
 import VocabPanel from './VocabPanel';
 
-type Tab = 'chat' | 'vocab';
+type Tab = 'chat' | 'vocab' | 'subs';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
@@ -34,6 +35,7 @@ export default function App() {
           [
             ['chat', '句子对话'],
             ['vocab', '生词本'],
+            ['subs', '字幕'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -52,7 +54,13 @@ export default function App() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'chat' ? <ChatPanel onPending={() => setTab('chat')} /> : <VocabPanel />}
+        {tab === 'chat' ? (
+          <ChatPanel onPending={() => setTab('chat')} />
+        ) : tab === 'subs' ? (
+          <SubtitlesPanel />
+        ) : (
+          <VocabPanel />
+        )}
       </div>
     </div>
   );
