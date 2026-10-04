@@ -135,6 +135,29 @@ export default defineBackground(() => {
         return { ok: false, error: 'GESTURE' };
       }
     }
+    if (type === 'fetchSubtitles') {
+      // Subtitle fetching runs IN the video page's content script (same-origin
+      // requests to youtube/bilibili work there; the SW would hit CORS/origin
+      // limits). Forward to the tab that asked.
+      try {
+        const { url, tabId } = (message ?? {}) as { url?: string; tabId?: number };
+        if (!url) return { ok: false, error: 'no url' };
+        let target = tabId;
+        if (target == null) {
+          const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
+          target = tab?.id;
+        }
+        if (target == null) throw new Error('未找到视频标签页');
+        const result = (await browser.tabs.sendMessage(target, {
+          type: 'pageFetchSubtitles',
+          url,
+        })) as Record<string, unknown> | undefined;
+        if (!result) throw new Error('内容脚本未响应（请刷新视频页面后重试）');
+        return result;
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
     if (type === 'aiChatRequest') {
       // The side panel asks for a completion. The offscreen document has no
       // chrome.storage API, so the AI settings are read here (SW context)

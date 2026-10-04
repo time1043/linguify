@@ -7,8 +7,16 @@ export default defineConfig({
   manifest: {
     name: 'Linguify',
     description: 'Look up selected words in your local vocabulary buckets',
-    permissions: ['storage', 'offscreen'],
-    host_permissions: ['https://api.deepseek.com/*'],
+    permissions: ['storage', 'offscreen', 'sidePanel', 'tabs', 'scripting'],
+    host_permissions: [
+      'https://api.deepseek.com/*',
+      'https://www.youtube.com/*',
+      'https://api.bilibili.com/*',
+      'https://www.bilibili.com/*',
+      'https://*.akamaized.net/*',
+      'https://*.bilivideo.com/*',
+      'https://*.hdslb.com/*',
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],
