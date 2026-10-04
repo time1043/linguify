@@ -139,6 +139,7 @@ export default function SubtitlesPanel() {
                 {result.lines.length} 条字幕 （点击行跳转视频）
               </p>
               <p className="mt-0.5 truncate font-mono text-[10px] text-zinc-400">{targetLabel}</p>
+              <p className="truncate font-mono text-[10px] text-zinc-400">{result.videoKey}</p>
             </div>
             <div className="space-y-0.5">
               {result.lines.map((line, i) => (

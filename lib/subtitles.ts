@@ -14,6 +14,9 @@ export interface SubtitleResult {
   title: string;
   lang: string;
   lines: SubtitleLine[];
+  // Resolved identifiers echoed back for debugging: the video id from the
+  // page url and (bilibili) the aid/cid the subtitle list was fetched for.
+  videoKey: string;
 }
 
 export type VideoPlatform = 'youtube' | 'bilibili';
@@ -224,7 +227,13 @@ async function fetchYoutube(videoId: string): Promise<SubtitleResult> {
           p?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [],
         );
         if (picked) {
-          return { platform: 'youtube', title: videoTitle, lang: picked.lang, lines: picked.lines };
+          return {
+            platform: 'youtube',
+            title: videoTitle,
+            lang: picked.lang,
+            lines: picked.lines,
+            videoKey: 'v=' + videoId,
+          };
         }
       }
     }
@@ -238,7 +247,13 @@ async function fetchYoutube(videoId: string): Promise<SubtitleResult> {
     videoTitle = videoTitle || title;
     const picked = await tryDownload(tracks);
     if (picked) {
-      return { platform: 'youtube', title: videoTitle, lang: picked.lang, lines: picked.lines };
+      return {
+        platform: 'youtube',
+        title: videoTitle,
+        lang: picked.lang,
+        lines: picked.lines,
+        videoKey: 'v=' + videoId,
+      };
     }
   }
 
@@ -298,7 +313,13 @@ async function fetchBilibili(videoId: string): Promise<SubtitleResult> {
     }));
   if (lines.length === 0) throw new Error('字幕内容为空');
 
-  return { platform: 'bilibili', title: title ?? '', lang: sub.lan_doc ?? sub.lan ?? '', lines };
+  return {
+    platform: 'bilibili',
+    title: title ?? '',
+    lang: sub.lan_doc ?? sub.lan ?? '',
+    lines,
+    videoKey: `bvid=${videoId} aid=${aid} cid=${cid}`,
+  };
 }
 
 // YouTube path: runs in the video page's content script — the watch page and
