@@ -301,10 +301,16 @@ async function fetchBilibili(videoId: string): Promise<SubtitleResult> {
   return { platform: 'bilibili', title: title ?? '', lang: sub.lan_doc ?? sub.lan ?? '', lines };
 }
 
-export async function fetchSubtitles(pageUrl: string): Promise<SubtitleResult> {
-  const detected = detectPlatform(pageUrl);
-  if (!detected) throw new Error('不是支持的视频页面');
-  return detected.platform === 'youtube'
-    ? fetchYoutube(detected.videoId)
-    : fetchBilibili(detected.videoId);
+// YouTube path: runs in the video page's content script — the watch page and
+// timedtext endpoints are same-origin there. (The background SW hits origin
+// restrictions on the timedtext endpoint: empty 200 bodies.)
+export async function fetchYoutubeSubtitles(videoId: string): Promise<SubtitleResult> {
+  return fetchYoutube(videoId);
+}
+
+// Bilibili path: runs in the background service worker — its fetch carries
+// the user's bilibili login cookies (required for AI/CC subtitles) and
+// bypasses CORS via host permissions.
+export async function fetchBilibiliSubtitles(videoId: string): Promise<SubtitleResult> {
+  return fetchBilibili(videoId);
 }

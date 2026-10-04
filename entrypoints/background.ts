@@ -6,6 +6,7 @@ import type { AddWordResponse, LookupResponse, RefreshResponse } from '@/lib/typ
 
 import { VocabAccessError, getBucketDir, readBuckets } from '@/lib/fsa';
 import { aiApiKeyItem, aiModelItem, aiPendingSessionItem } from '@/lib/settings';
+import { detectPlatform, fetchBilibiliSubtitles } from '@/lib/subtitles';
 import { buildVocabIndex, lookupWord, normalizeWord, type VocabIndex } from '@/lib/vocab';
 
 const VOCAB_TTL_MS = 60_000;
@@ -136,12 +137,21 @@ export default defineBackground(() => {
       }
     }
     if (type === 'fetchSubtitles') {
-      // Subtitle fetching runs IN the video page's content script (same-origin
-      // requests to youtube/bilibili work there; the SW would hit CORS/origin
-      // limits). Forward to the tab that asked.
+      // Split by platform: YOUTUBE subtitles are fetched in the video page's
+      // content script (the timedtext endpoint is same-origin only there —
+      // the SW gets empty 200 bodies); BILIBILI subtitles are fetched here in
+      // the SW, whose fetch carries the user's bilibili login cookies
+      // (required for AI/CC subtitles) and bypasses CORS via host permissions.
       try {
         const { url, tabId } = (message ?? {}) as { url?: string; tabId?: number };
         if (!url) return { ok: false, error: 'no url' };
+        const detected = detectPlatform(url);
+        if (!detected) return { ok: false, error: '不是支持的视频页面' };
+
+        if (detected.platform === 'bilibili') {
+          return { ok: true, ...(await fetchBilibiliSubtitles(detected.videoId)) };
+        }
+
         let target = tabId;
         if (target == null) {
           const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
@@ -156,6 +166,14 @@ export default defineBackground(() => {
         return result;
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+    if (type && OFFSCREEN_TYPES.has(type)) {
+      try {
+        const result = await relayToOffscreen(message);
+        return result;
+      } catch (err) {
+        return { ok: false, error: errorCode(err) };
       }
     }
     if (type === 'aiChatRequest') {
@@ -188,14 +206,6 @@ export default defineBackground(() => {
           apiKey,
           model,
         });
-        return result;
-      } catch (err) {
-        return { ok: false, error: errorCode(err) };
-      }
-    }
-    if (type && OFFSCREEN_TYPES.has(type)) {
-      try {
-        const result = await relayToOffscreen(message);
         return result;
       } catch (err) {
         return { ok: false, error: errorCode(err) };
