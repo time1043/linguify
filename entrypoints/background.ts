@@ -137,6 +137,7 @@ export default defineBackground(() => {
       }
     }
     if (type === 'fetchSubtitles') {
+      const BUILD_MARK = 'bg-v7';
       // Split by platform: YOUTUBE subtitles are fetched in the video page's
       // content script (the timedtext endpoint is same-origin only there —
       // the SW gets empty 200 bodies); BILIBILI subtitles are fetched here in
@@ -152,12 +153,32 @@ export default defineBackground(() => {
           return { ok: true, ...(await fetchBilibiliSubtitles(detected.videoId)) };
         }
 
-        let target = tabId;
+        // Prefer the sender's own tab (the video page) — most specific.
+        let target = tabId ?? (sender as { tab?: { id?: number } } | undefined)?.tab?.id;
         if (target == null) {
+          // Fall back to the focused window's active tab.
           const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
           target = tab?.id;
         }
-        if (target == null) throw new Error('未找到视频标签页');
+        if (target == null) {
+          // Last resort: find any open video page tab.
+          const [tab] = await browser.tabs.query({
+            url: ['*://www.youtube.com/watch*', '*://www.bilibili.com/video*'],
+          });
+          target = tab?.id;
+        }
+        console.log(
+          `[fetchSubtitles] url=${url.slice(0, 60)} senderTab=${
+            (sender as { tab?: { id?: number } } | undefined)?.tab?.id ?? 'none'
+          } target=${target ?? 'NONE'}`,
+        );
+        if (target == null) {
+          const allTabs = await browser.tabs.query({});
+          const tabList = allTabs
+            .map((t) => `${t.id}:${(t.url || 'about:blank').slice(0, 60)}`)
+            .join(' | ');
+          throw new Error(`未找到视频标签页（当前标签页: ${tabList}）`);
+        }
         const result = (await browser.tabs.sendMessage(target, {
           type: 'pageFetchSubtitles',
           url,

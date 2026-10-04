@@ -8,7 +8,7 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
   async main(ctx) {
     const ui = await createShadowRootUi(ctx, {
-      name: 'linguify',
+      name: 'linguify-pin',
       position: 'inline',
       anchor: 'body',
       onMount: (container) => {
