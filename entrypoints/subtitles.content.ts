@@ -1,27 +1,53 @@
-// Content script for video pages: fetches YOUTUBE subtitles same-origin
-// (the watch page and timedtext endpoints only work from the youtube origin,
-// so the background cannot do it). Bilibili subtitles are fetched by the
-// background worker instead — its fetch carries the login cookies required
-// for AI/CC subtitles, and host permissions bypass CORS.
+// Content script for youtube.com: captures the subtitle data the YouTube
+// player itself loads. The player's own timedtext requests carry a valid
+// BotGuard pot token — direct API calls from extension contexts are rejected
+// (empty 200 bodies), so we inject a main-world capture hook, trigger the
+// player's captions module, poll for the captured data, and respond.
 
-import { fetchYoutubeSubtitles } from '@/lib/subtitles';
+import { parseTimedtextJson3, type SubtitleLine } from '@/lib/subtitles';
 
 export default defineContentScript({
-  matches: ['https://www.youtube.com/*', 'https://www.bilibili.com/*'],
+  matches: ['https://www.youtube.com/*'],
   async main() {
+    // 1. Inject the main-world capture hook once per page.
+    const script = document.createElement('script');
+    script.src = browser.runtime.getURL('/injected.js');
+    document.documentElement.append(script);
+    script.remove();
+
+    // 2. Captures arrive via window messages from the main world.
+    const captures: string[] = [];
+    window.addEventListener('message', (ev) => {
+      if (
+        ev.source === window &&
+        typeof ev.data === 'object' &&
+        ev.data?.type === 'linguify-captures' &&
+        Array.isArray(ev.data.captures)
+      ) {
+        captures.push(...ev.data.captures);
+      }
+    });
+
+    // 3. The panel's request: trigger caption loading, then poll.
     browser.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-      const msg = message as { type?: string; url?: string } | undefined;
+      const msg = message as { type?: string } | undefined;
       if (msg?.type !== 'pageFetchSubtitles') return false;
 
-      const parsed = new URL(msg.url ?? window.location.href);
-      // youtube watch URLs carry ?v=; /shorts/ carries the id in the path
-      const videoId =
-        parsed.searchParams.get('v') ?? parsed.pathname.match(/\/shorts\/([\w-]{11})/)?.[1] ?? null;
       void (async () => {
-        if (!videoId) throw new Error('不是 YouTube 视频页面');
-        // youtube → same-origin fetch here; bilibili → the background
-        // handles it directly (its fetch carries the login cookies)
-        return { ok: true, ...(await fetchYoutubeSubtitles(videoId)) };
+        window.dispatchEvent(new Event('linguify-trigger'));
+        for (let i = 0; i < 40; i++) {
+          await new Promise((r) => setTimeout(r, 200));
+          if (captures.length > 0) break;
+        }
+        if (captures.length === 0) {
+          throw new Error('未能从播放器捕获字幕（请确认视频已开始播放并开启 CC，然后重试）');
+        }
+        // Parse the most recent capture (json3 format).
+        const lines: SubtitleLine[] = parseTimedtextJson3(
+          JSON.parse(captures[captures.length - 1] ?? '{}'),
+        );
+        if (lines.length === 0) throw new Error('字幕内容为空');
+        return { ok: true, lines };
       })()
         .then((result) => sendResponse(result))
         .catch((err) =>

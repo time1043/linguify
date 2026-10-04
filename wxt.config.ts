@@ -17,6 +17,12 @@ export default defineConfig({
       'https://*.bilivideo.com/*',
       'https://*.hdslb.com/*',
     ],
+    web_accessible_resources: [
+      {
+        resources: ['injected.js'],
+        matches: ['https://www.youtube.com/*'],
+      },
+    ],
   },
   vite: () => ({
     plugins: [tailwindcss()],

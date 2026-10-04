@@ -91,8 +91,9 @@ function parseTimedtextXml(xml: string): SubtitleLine[] {
   return lines;
 }
 
-// Parse YouTube's json3 event format.
-function parseTimedtextJson3(data: {
+// Parse YouTube's json3 event format. Exported for the content script's
+// player-capture flow (the player's own timedtext responses are json3).
+export function parseTimedtextJson3(data: {
   events?: Array<{ tStartMs?: number; dDurationMs?: number; segs?: Array<{ utf8?: string }> }>;
 }): SubtitleLine[] {
   const lines: SubtitleLine[] = [];
