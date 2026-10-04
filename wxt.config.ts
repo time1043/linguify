@@ -5,7 +5,7 @@ import { defineConfig } from 'wxt';
 export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'Vocab Lens',
+    name: 'Linguify',
     description: 'Look up selected words in your local vocabulary buckets',
     permissions: ['storage', 'offscreen'],
     host_permissions: ['https://api.deepseek.com/*'],

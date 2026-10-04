@@ -13,7 +13,7 @@ export default function App() {
   return (
     <div className="flex h-full flex-col bg-white font-sans text-sm text-zinc-800">
       <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2">
-        <h1 className="text-sm font-semibold">Vocab Lens</h1>
+        <h1 className="text-sm font-semibold">Linguify</h1>
         <button
           type="button"
           onClick={() => setSettingsOpen((open) => !open)}

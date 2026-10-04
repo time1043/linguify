@@ -1,4 +1,4 @@
-# Vocab Lens
+# Linguify
 
 Chrome MV3 extension (WXT + React 19 + TypeScript + Tailwind CSS v4 + Jotai)
 that looks up any selected word on a page in a local `vocabulary-bucket`

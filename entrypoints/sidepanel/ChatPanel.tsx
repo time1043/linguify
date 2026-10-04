@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import type { SessionDoc, SessionMessage } from '@/lib/sessions';
 
+import { parseAnalysis } from '@/lib/ai';
 import { callOffscreen } from '@/lib/relay';
 import { aiApiKeyItem, aiPendingSessionItem, type PendingAiSession } from '@/lib/settings';
+
+import AnalysisCard from './AnalysisCard';
 
 type Status = 'empty' | 'loading' | 'analyzing' | 'ready' | 'error';
 type View = 'chat' | 'history';
@@ -312,31 +317,50 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
             点击紫色小圆点即可开始分析。
           </p>
         )}
-        {messages.map((m, i) =>
-          m.role === 'user' ? (
-            <div key={i} className="flex flex-col items-end">
-              <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-3 py-2 text-xs leading-relaxed text-white">
-                {m.content}
+
+        {(() => {
+          // The first assistant reply is the structured sentence analysis —
+          // rendered as the grammar-chip card. Everything after it (the
+          // back-and-forth) renders as chat bubbles. Sessions whose first
+          // reply is not JSON fall back to plain chat rendering.
+          const firstAssistantIdx = messages.findIndex((m) => m.role === 'assistant');
+          const firstAssistant = messages[firstAssistantIdx]?.content;
+          const analysis = firstAssistantIdx >= 0 ? parseAnalysis(firstAssistant ?? '') : null;
+          const followUps = analysis ? messages.slice(firstAssistantIdx + 1) : messages;
+          const bubble = (m: SessionMessage, i: number) =>
+            m.role === 'user' ? (
+              <div key={i} className="flex flex-col items-end">
+                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-3 py-2 text-xs leading-relaxed text-white">
+                  {m.content}
+                </div>
+                {!analysis && i === 0 && sourceUrl && (
+                  <a
+                    href={sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-0.5 max-w-[85%] truncate text-[10px] text-indigo-400 hover:underline"
+                  >
+                    {sourceUrl}
+                  </a>
+                )}
               </div>
-              {i === 0 && sourceUrl && (
-                <a
-                  href={sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-0.5 max-w-[85%] truncate text-[10px] text-indigo-400 hover:underline"
-                >
-                  {sourceUrl}
-                </a>
+            ) : (
+              <div key={i} className="flex justify-start">
+                <div className="md-body max-w-[90%] rounded-2xl rounded-bl-md bg-zinc-100 px-3 py-2 text-xs leading-relaxed text-zinc-800">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                </div>
+              </div>
+            );
+          return (
+            <>
+              {analysis && <AnalysisCard analysis={analysis} sourceUrl={sourceUrl} />}
+              {(analysis ? followUps : messages).map((m, i) =>
+                bubble(m, analysis ? i + firstAssistantIdx + 1 : i),
               )}
-            </div>
-          ) : (
-            <div key={i} className="flex justify-start">
-              <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-zinc-100 px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap text-zinc-800">
-                {m.content}
-              </div>
-            </div>
-          ),
-        )}
+            </>
+          );
+        })()}
+
         {status === 'analyzing' && <p className="text-xs text-zinc-400">分析中…</p>}
         {status === 'error' && <p className="text-xs text-red-600">{error}</p>}
         <div ref={bottomRef} />
