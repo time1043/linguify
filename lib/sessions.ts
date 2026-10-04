@@ -3,7 +3,7 @@
 // The session key is derived deterministically from the normalized sentence,
 // so re-selecting a previously analyzed sentence finds the same session.
 
-import type { BucketDirHandle } from './fsa';
+import type { BucketDirHandle, IterableDirectoryHandle } from './fsa';
 
 export interface SessionSource {
   sentence: string;
@@ -81,4 +81,33 @@ export async function saveSession(dir: BucketDirHandle, doc: SessionDoc): Promis
   await writable.write(`${JSON.stringify(doc, null, 2)}\n`);
   await writable.close();
   return `user/ai-sessions/${fileName}`;
+}
+
+// List every persisted session (newest first), including the full messages
+// so the panel can search across conversation content without re-reading
+// each file. Malformed files are skipped.
+export async function listSessions(
+  dir: BucketDirHandle,
+): Promise<Array<SessionDoc & { fileName: string }>> {
+  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
+  const sessionsDir = userDir
+    ? await userDir.getDirectoryHandle('ai-sessions').catch(() => null)
+    : null;
+  if (!sessionsDir) return [];
+
+  const sessions: Array<SessionDoc & { fileName: string }> = [];
+  for await (const entry of (sessionsDir as IterableDirectoryHandle).values()) {
+    if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+    try {
+      const doc = JSON.parse(
+        await (await (entry as FileSystemFileHandle).getFile()).text(),
+      ) as SessionDoc;
+      if (doc.version === 1 && Array.isArray(doc.messages)) {
+        sessions.push({ ...doc, fileName: entry.name });
+      }
+    } catch {
+      // Skip malformed session files.
+    }
+  }
+  return sessions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }

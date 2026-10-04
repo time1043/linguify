@@ -6,6 +6,11 @@ import { callOffscreen } from '@/lib/relay';
 import { aiApiKeyItem, aiPendingSessionItem, type PendingAiSession } from '@/lib/settings';
 
 type Status = 'empty' | 'loading' | 'analyzing' | 'ready' | 'error';
+type View = 'chat' | 'history';
+
+// A persisted session as returned by the listAiSessions handler: the full
+// doc plus the file it lives in.
+type SessionListItem = SessionDoc & { fileName: string };
 
 const PENDING_MAX_AGE_MS = 10 * 60_000;
 
@@ -26,6 +31,12 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
   const [saveNote, setSaveNote] = useState('');
   const [noApiKey, setNoApiKey] = useState(false);
   const [input, setInput] = useState('');
+  const [view, setView] = useState<View>('chat');
+  const [sessionSentence, setSessionSentence] = useState('');
+  const [items, setItems] = useState<SessionListItem[] | null>(null);
+  const [itemsStatus, setItemsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [itemsError, setItemsError] = useState('');
+  const [query, setQuery] = useState('');
   const docRef = useRef<SessionDoc | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -88,6 +99,8 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
       setStatus('loading');
       setError('');
       setSaveNote('');
+      setSessionSentence(pending.sentence);
+      setView('chat');
       try {
         const dir = await callOffscreen<{ doc: SessionDoc | null }>({
           type: 'loadAiSession',
@@ -127,6 +140,37 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
     },
     [completeTurn, runTurn],
   );
+
+  const refreshHistory = useCallback(async () => {
+    setItemsStatus('loading');
+    setItemsError('');
+    try {
+      const { sessions } = await callOffscreen<{ sessions: SessionListItem[] }>({
+        type: 'listAiSessions',
+      });
+      setItems(sessions);
+      setItemsStatus('ready');
+    } catch (err) {
+      setItemsStatus('error');
+      setItemsError(describeAiError(err));
+    }
+  }, []);
+
+  const openHistory = useCallback(() => {
+    setView('history');
+    void refreshHistory();
+  }, [refreshHistory]);
+
+  // Open a session straight from the history list — the list already carries
+  // the full doc, so no extra round-trip is needed.
+  const openFromHistory = useCallback((item: SessionListItem) => {
+    docRef.current = item;
+    setMessages(item.messages);
+    setSessionSentence(item.source.sentence);
+    setStatus('ready');
+    setSaveNote(`已加载历史会话（${item.messages.length} 条消息）`);
+    setView('chat');
+  }, []);
 
   useEffect(() => {
     void (async () => {
@@ -178,9 +222,82 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
   };
 
   const busy = status === 'analyzing' || status === 'loading';
+  // Where the analyzed sentence came from — shown under the first message,
+  // the same way the vocab list shows example source links.
+  const sourceUrl = docRef.current?.source.url ?? '';
+
+  const query_ = query.trim().toLowerCase();
+  const filtered = (items ?? []).filter(
+    (s) =>
+      !query_ ||
+      s.source.sentence.toLowerCase().includes(query_) ||
+      s.messages.some((m) => m.content.toLowerCase().includes(query_)),
+  );
+
+  if (view === 'history') {
+    return (
+      <div className="flex h-full flex-col">
+        <div className="flex items-center gap-2 border-b border-zinc-200 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setView('chat')}
+            aria-label="返回对话"
+            className="rounded-md px-1.5 py-0.5 text-xs text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-700"
+          >
+            ←
+          </button>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索句子或对话内容…"
+            className="min-w-0 flex-1 rounded-lg border border-zinc-300 px-2 py-1.5 text-xs outline-none focus:border-indigo-500"
+          />
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3">
+          {itemsStatus === 'loading' && <p className="text-xs text-zinc-400">读取中…</p>}
+          {itemsStatus === 'error' && <p className="text-xs text-red-600">{itemsError}</p>}
+          {itemsStatus === 'ready' && filtered.length === 0 && (
+            <p className="mt-6 text-center text-xs leading-relaxed text-zinc-400">
+              {items && items.length > 0 ? '没有匹配的会话。' : '还没有会话历史。'}
+            </p>
+          )}
+          {filtered.map((s) => (
+            <button
+              key={s.fileName}
+              type="button"
+              onClick={() => openFromHistory(s)}
+              className="block w-full rounded-xl border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-indigo-300"
+            >
+              <p className="line-clamp-2 text-xs font-medium text-zinc-900">{s.source.sentence}</p>
+              {s.source.url && (
+                <span className="mt-1 block truncate text-[10px] text-indigo-500">
+                  {s.source.url}
+                </span>
+              )}
+              <p className="mt-1 text-[10px] text-zinc-400">
+                {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} 条消息
+              </p>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
+      <div className="flex items-center gap-2 border-b border-zinc-100 px-3 py-1.5 text-[10px] text-zinc-400">
+        <span className="truncate">{sessionSentence || '未选择句子'}</span>
+        <button
+          type="button"
+          onClick={openHistory}
+          className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2 py-0.5 text-[10px] text-zinc-600 transition-colors hover:bg-zinc-50"
+        >
+          历史
+        </button>
+      </div>
+
       {noApiKey && (
         <div className="mx-3 mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
           尚未配置 DeepSeek API Key，请点上方「设置」。
@@ -197,10 +314,20 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
         )}
         {messages.map((m, i) =>
           m.role === 'user' ? (
-            <div key={i} className="flex justify-end">
+            <div key={i} className="flex flex-col items-end">
               <div className="max-w-[85%] rounded-2xl rounded-br-md bg-indigo-600 px-3 py-2 text-xs leading-relaxed text-white">
                 {m.content}
               </div>
+              {i === 0 && sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-0.5 max-w-[85%] truncate text-[10px] text-indigo-400 hover:underline"
+                >
+                  {sourceUrl}
+                </a>
+              )}
             </div>
           ) : (
             <div key={i} className="flex justify-start">
