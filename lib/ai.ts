@@ -17,14 +17,37 @@ export interface AiMessage {
   content: string;
 }
 
+export interface AnalysisChunk {
+  text: string;
+  role: string;
+}
+
+export interface AnalysisVocab {
+  term: string;
+  meaning: string;
+}
+
+// The structured sentence analysis the first turn produces.
+export interface SentenceAnalysis {
+  chunks: AnalysisChunk[];
+  vocab: AnalysisVocab[];
+  phrases: string[];
+}
+
 const SYSTEM_PROMPT = `You are an English reading assistant for Chinese learners.
 The user sends an English sentence (or a follow-up question about it).
-For the first message, analyze the sentence in compact plain Chinese text
-using exactly these labels, no markdown syntax:
-【生词】word — 中文释义 (only non-basic words or phrases, one per line; write 无 if none)
-【结构】句子结构分析 (subject / verb / object / modifiers / clauses, brief)
-【短语】习惯用语或固定表达 (write 无 if none)
-For follow-up questions, answer directly and concisely in Chinese.`;
+For the FIRST message, reply with ONLY a JSON object — no markdown fences,
+no text before or after it — shaped exactly like this:
+{"chunks":[{"text":"<sentence fragment>","role":"<主语|谓语|宾语|定语|状语|补语|其他>"}],
+ "vocab":[{"term":"<word or phrase>","meaning":"<中文释义>"}],
+ "phrases":["<idiom or fixed expression>"]}
+Rules:
+- "chunks" covers the WHOLE sentence left to right in order, no gaps, no
+  overlaps; "role" is that fragment's grammatical role in this sentence
+  (written in Chinese).
+- "vocab" lists only non-basic words or phrases with Chinese meanings.
+- "phrases" lists idioms or fixed expressions worth knowing.
+For follow-up questions, answer in compact plain Chinese text.`;
 
 let cachedModels: MutableModels | null = null;
 
@@ -88,4 +111,35 @@ export async function aiComplete(messages: AiMessage[], config: AiConfig): Promi
     .filter((block) => block.type === 'text')
     .map((block) => block.text)
     .join('');
+}
+
+// Parse the first-turn reply into the structured sentence analysis. Returns
+// null when the content is not the expected JSON — older sessions and
+// follow-up replies stay plain text.
+export function parseAnalysis(content: string): SentenceAnalysis | null {
+  const raw = content
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/i, '');
+  if (!raw.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<SentenceAnalysis>;
+    if (!Array.isArray(parsed.chunks)) return null;
+    const chunks = parsed.chunks.filter(
+      (c): c is AnalysisChunk => !!c && typeof c.text === 'string' && typeof c.role === 'string',
+    );
+    if (chunks.length === 0) return null;
+    const vocab = Array.isArray(parsed.vocab)
+      ? parsed.vocab.filter(
+          (v): v is AnalysisVocab =>
+            !!v && typeof v.term === 'string' && typeof v.meaning === 'string',
+        )
+      : [];
+    const phrases = Array.isArray(parsed.phrases)
+      ? parsed.phrases.filter((p): p is string => typeof p === 'string')
+      : [];
+    return { chunks, vocab, phrases };
+  } catch {
+    return null;
+  }
 }
