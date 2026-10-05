@@ -7,8 +7,10 @@
 // current playback position, i.e. the highlighted one):
 //   a  play the previous line        d  play the next line
 //   s  toggle single-line AB loop    z  mark loop point A (this line's start)
-//   x  mark loop point B (this line's start; on the A line itself, that
-//      line's end, which degrades to a single-line loop)
+//   x  mark loop point B — the loop plays through the END of this line, so
+//      x on the last wanted line includes it; on the A line itself this
+//      degrades to a single-line loop
+//   space play/pause (panel only; the page leaves it to the site)
 //   Esc clear loop + marks
 //
 // All state and side effects live inside main() — WXT evaluates the module
@@ -167,15 +169,16 @@ export default defineContentScript({
 
     // While a loop is active, rAF keeps the playhead inside [start, end):
     // the ~4Hz timeupdate alone would overshoot into the next line audibly.
+    // Pausing (space) inside the loop keeps the position — only *playback*
+    // is confined, so the user can still scrub while paused.
     function startLoopTicker(): void {
       stopLoopTicker();
       const tick = (): void => {
         loopRaf = 0;
         if (!video || !loop) return;
         const t = video.currentTime;
-        if (t >= loop.end - 0.01 || t < loop.start - 0.25) {
+        if (!video.paused && (t >= loop.end - 0.01 || t < loop.start - 0.25)) {
           video.currentTime = loop.start;
-          if (video.paused) void video.play().catch(() => undefined);
         }
         loopRaf = requestAnimationFrame(tick);
       };
@@ -194,6 +197,14 @@ export default defineContentScript({
       if (cmd === 'cancelLoop') {
         clearLoopState();
         toast('已清除循环');
+        broadcastState();
+        return;
+      }
+      // Play/pause must work without subtitles loaded too.
+      if (cmd === 'togglePlay') {
+        if (!video) return;
+        if (video.paused) void video.play().catch(() => undefined);
+        else video.pause();
         broadcastState();
         return;
       }
@@ -216,25 +227,16 @@ export default defineContentScript({
           return;
         }
         if (currentIdx < 0) return;
-        let endTime: number;
-        let lastIdx: number;
-        let kind: SubtitlesLoopState['kind'];
-        if (currentIdx === pendingA.idx) {
-          // B on the A line itself: loop that one line's full duration.
-          endTime = cues[currentIdx]!.end;
-          lastIdx = currentIdx;
-          kind = 'single';
-        } else if (currentIdx < pendingA.idx) {
+        if (currentIdx < pendingA.idx) {
           toast('B 点必须在 A 点之后');
           return;
-        } else {
-          // B is the start of this line, so the line itself is not played —
-          // pressing x on the line after the last wanted one loops exactly
-          // the wanted range.
-          endTime = cues[currentIdx]!.start;
-          lastIdx = currentIdx - 1;
-          kind = 'range';
         }
+        // B marks the END line: the loop plays through the end of the line x
+        // was pressed on, so x on the last wanted line includes it. On the A
+        // line itself this degrades to a single-line loop.
+        const endTime = cues[currentIdx]!.end;
+        const lastIdx = currentIdx;
+        const kind: SubtitlesLoopState['kind'] = currentIdx === pendingA.idx ? 'single' : 'range';
         loop = {
           kind,
           start: pendingA.time,
@@ -246,7 +248,11 @@ export default defineContentScript({
         pendingA = null;
         seekTo(loop.start);
         startLoopTicker();
-        toast(`AB 循环：第 ${loop.aIdx + 1}–${loop.lastIdx + 1} 句`);
+        toast(
+          kind === 'single'
+            ? `单句循环：第 ${loop.aIdx + 1} 句`
+            : `AB 循环：第 ${loop.aIdx + 1}–${loop.lastIdx + 1} 句`,
+        );
         broadcastState();
         return;
       }
@@ -275,10 +281,9 @@ export default defineContentScript({
         broadcastState();
         return;
       }
-      // prev / next: break any active loop but keep a pending A mark, so the
-      // "z … d d … x" flow (extend the loop by moving forward) survives.
-      stopLoopTicker();
-      loop = null;
+      // prev / next exits loop mode entirely — including a pending A mark —
+      // so navigation is never silently confined to an old loop range.
+      clearLoopState();
       const target =
         cmd === 'prev'
           ? Math.max(0, currentIdx <= 0 ? 0 : currentIdx - 1)

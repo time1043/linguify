@@ -208,6 +208,15 @@ export default function SubtitlesPanel() {
       const target = e.target as HTMLElement | null;
       if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))
         return;
+      // Space toggles playback instead of re-activating the focused row
+      // (a clicked row keeps focus, and space would otherwise "click" it
+      // again, restarting that line) or scrolling the list.
+      if (e.key === ' ') {
+        if (!video) return;
+        e.preventDefault();
+        runCommand('togglePlay');
+        return;
+      }
       const cmd = keyCommands[e.key.toLowerCase()];
       if (!cmd) return;
       if (e.repeat && cmd !== 'prev' && cmd !== 'next') return;
@@ -334,8 +343,7 @@ export default function SubtitlesPanel() {
             </>
           ) : (
             <span>
-              A 点已定：第 {(pendingAIdx ?? 0) + 1} 句开头 — 走到结束句的下一句按 x（同一句按 x =
-              单句循环）
+              A 点已定：第 {(pendingAIdx ?? 0) + 1} 句开头 — 走到结束句按 x（同一句按 x = 单句循环）
             </span>
           )}
         </div>
@@ -343,7 +351,7 @@ export default function SubtitlesPanel() {
 
       {/* hotkey legend */}
       <div className="border-b border-zinc-200 px-3 py-1.5 text-[10px] text-zinc-400">
-        a 上一句 · d 下一句 · s 单句循环 · z 定A点 · x 定B点 · Esc 取消
+        a 上一句 · d 下一句 · space 播放/暂停 · s 单句循环 · z 定A点 · x 定B点 · Esc 取消
       </div>
 
       {/* subtitle list */}
@@ -358,7 +366,11 @@ export default function SubtitlesPanel() {
               key={`${cue.start}-${idx}`}
               type="button"
               data-idx={idx}
-              onClick={() => seekTo(cue.start)}
+              onClick={(e) => {
+                seekTo(cue.start);
+                // Drop focus so Space can never re-activate this row.
+                e.currentTarget.blur();
+              }}
               className={`flex w-full items-start gap-2 border-l-2 px-2 py-1.5 text-left transition-colors ${
                 idx === currentIdx
                   ? 'border-l-indigo-500 bg-indigo-50 font-medium text-indigo-900'

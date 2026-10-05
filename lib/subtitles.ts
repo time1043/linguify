@@ -27,10 +27,10 @@ export interface SubtitlesVideoInfo {
   title: string;
 }
 
-// Loop playback window owned by the content script. [start, end) in seconds;
-// aIdx is the line the loop starts on, bIdx the line whose start marks the
-// end boundary (exclusive — the line itself is not played), and lastIdx the
-// last line actually played (bIdx - 1, or aIdx for a single-line loop).
+// Loop playback window owned by the content script. The loop plays from the
+// start of line aIdx through the end of line bIdx (both lines included);
+// for a single-line loop aIdx == bIdx == lastIdx and the window is that
+// line's [start, end].
 export interface SubtitlesLoopState {
   kind: 'single' | 'range';
   start: number;
@@ -40,7 +40,14 @@ export interface SubtitlesLoopState {
   lastIdx: number;
 }
 
-export type SubtitleCommand = 'prev' | 'next' | 'toggleSingle' | 'markA' | 'markB' | 'cancelLoop';
+export type SubtitleCommand =
+  | 'prev'
+  | 'next'
+  | 'togglePlay'
+  | 'toggleSingle'
+  | 'markA'
+  | 'markB'
+  | 'cancelLoop';
 
 // --- side panel -> content script (via tabs.sendMessage) ---
 export interface SubtitlesSetCuesMessage {
