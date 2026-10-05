@@ -154,7 +154,7 @@ async function fetchYoutubeInnertube(
     headers['user-agent'] = 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip';
   }
   const res = await fetch(
-    'https://www.youtube.com/youtubei/v1/player?key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8',
+    `https://www.youtube.com/youtubei/v1/player?key=${INNERTUBE_PUBLIC_KEY}`,
     { method: 'POST', headers, body: JSON.stringify({ context, videoId }) },
   );
   if (!res.ok) return { title: '', tracks: [] };
