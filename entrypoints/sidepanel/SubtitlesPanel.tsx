@@ -320,6 +320,10 @@ export default function SubtitlesPanel() {
                 {'{ "'}
                 <span className="font-semibold">{videoId}</span>
                 {'": "<上传者>/<标题>.srt" }'}
+                <br />
+                {'{ "'}
+                <span className="font-semibold">{videoId}</span>
+                {'": "<上传者>/map.json" } ← 引用频道级映射'}
               </div>
             </div>
           )}

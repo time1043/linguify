@@ -1,11 +1,16 @@
 // Local subtitle files provided by the user, not fetched from the video
 // sites. Inside the vocabulary-bucket repo the layout stays human-organized
 // (uploader / title.srt — no ids in names), and a per-platform map.json ties
-// videos to files:
+// videos to files. Each entry maps a videoId either straight to the srt
+// path or to a channel-level map.json whose entries are relative to its own
+// directory:
 //
-//   _lib/subtitles/youtube/EnglishWithEvie/I'm moving to Canada.srt
+//   _lib/subtitles/youtube/<uploader>/<title>.srt
 //   _lib/subtitles/youtube/map.json
-//     { "C4Acd_5itrA": "EnglishWithEvie/I'm moving to Canada.srt" }
+//     { "C4Acd_5itrA": "<uploader>/<title>.srt" }        — direct
+//     { "C4Acd_5itrA": "<uploader>/map.json" }           — reference
+//   _lib/subtitles/youtube/<uploader>/map.json
+//     { "C4Acd_5itrA": "<title>.srt" }
 //
 // Lookup only needs (platform, videoId): map.json gives the srt path
 // relative to the platform directory. As a fallback, files literally named
@@ -198,27 +203,74 @@ export function subtitlePathCandidates(rel: string): string[] {
   return [rel, `${rel}.srt`, `${rel}.vtt`];
 }
 
-// Read <platform>/map.json ({ videoId: srt path }) and return
-// the mapped path for the video, or null when the map is missing, unreadable
-// or has no entry (the filename scan takes over then).
+// Read <platform>/map.json and return the mapped srt path relative to the
+// platform directory, or null when the map is missing, unreadable or has no
+// entry for the video (the filename scan takes over then). Accepted layouts,
+// all keyed by videoId either in the platform map itself or inside a
+// channel-level map referenced from it (a referenced map's entries are
+// relative to that file's directory):
+//
+//   map.json { "C4Acd_5itrA": "en-evie/title.srt" }   — direct entry
+//   map.json { "C4Acd_5itrA": "en-evie/map.json" }    — per-video reference
+//   map.json { "en-evie": "en-evie/map.json" }        — channel index
+//   en-evie/map.json { "C4Acd_5itrA": "title.srt" }
+// References are followed breadth-first up to five maps so a cyclic map
+// cannot loop forever.
 async function resolveMappedSubtitle(
   platformDir: FileSystemDirectoryHandle,
   platform: VideoPlatform,
   videoId: string,
 ): Promise<string | null> {
-  let map: unknown;
-  try {
-    const file = await platformDir.getFileHandle('map.json');
-    map = JSON.parse(await (await file.getFile()).text());
-  } catch {
-    return null;
+  const firstString = (v: unknown): string | null => {
+    if (Array.isArray(v)) v = v.find((item) => typeof item === 'string');
+    return typeof v === 'string' && v.trim() ? v : null;
+  };
+  const loadMap = async (rel: string): Promise<Record<string, unknown> | null> => {
+    try {
+      const text = await readTextBelow(platformDir, rel);
+      if (text == null) return null;
+      const parsed: unknown = JSON.parse(text);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const visited = new Set<string>();
+  const queue: Array<{ rel: string; base: string }> = [{ rel: 'map.json', base: '' }];
+  while (queue.length && visited.size < 5) {
+    const { rel, base } = queue.shift() as { rel: string; base: string };
+    if (visited.has(rel)) continue;
+    visited.add(rel);
+    const map = await loadMap(rel);
+    if (!map) continue;
+    const own = firstString(map[videoId]);
+    if (own != null && !own.toLowerCase().endsWith('.json')) {
+      const mapped = normalizeMappedPath(own, platform);
+      // Entries may be written relative to the map's directory or to the
+      // platform directory — a leading base means the latter.
+      if (base && !mapped.startsWith(base)) return `${base}${mapped}`;
+      return mapped;
+    }
+    // Enqueue the video's own .json reference (if any), then every other
+    // channel-map reference in this map.
+    const refs: string[] = own != null ? [own] : [];
+    for (const [key, value] of Object.entries(map)) {
+      if (key === videoId) continue;
+      const s = firstString(value);
+      if (s?.toLowerCase().endsWith('.json')) refs.push(s);
+    }
+    for (const ref of refs) {
+      const mapped = normalizeMappedPath(ref, platform);
+      const segments = mapped.split('/');
+      segments.pop();
+      queue.push({
+        rel: mapped,
+        base: segments.length ? `${segments.join('/')}/` : '',
+      });
+    }
   }
-  if (!map || typeof map !== 'object') return null;
-  let value = (map as Record<string, unknown>)[videoId];
-  // Tolerate a list of paths (e.g. languages) by taking the first string.
-  if (Array.isArray(value)) value = value.find((item) => typeof item === 'string');
-  if (typeof value !== 'string' || !value.trim()) return null;
-  return normalizeMappedPath(value, platform);
+  return null;
 }
 
 // Read a file at a slash-separated path below dir (getFileHandle only takes
