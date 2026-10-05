@@ -309,10 +309,16 @@ export default function SubtitlesPanel() {
           )}
           {loadError === 'NOT_FOUND' && (
             <div>
-              没有找到字幕文件，请按此结构放置：
+              没有找到字幕文件，请按此结构放置，并在 map.json 里登记映射：
               <div className="mt-1 rounded bg-white/70 px-2 py-1 font-mono text-[10px] leading-relaxed">
-                user/subtitles/{platform}/&lt;上传者&gt;/&lt;标题&gt;/
-                <span className="font-semibold">{videoId}</span>.srt
+                user/subtitles/{platform}/&lt;上传者&gt;/&lt;标题&gt;.srt
+                <br />
+                user/subtitles/{platform}/map.json
+              </div>
+              <div className="mt-1 rounded bg-white/70 px-2 py-1 font-mono text-[10px] leading-relaxed">
+                {'{ "'}
+                <span className="font-semibold">{videoId}</span>
+                {'": "<上传者>/<标题>.srt" }'}
               </div>
             </div>
           )}

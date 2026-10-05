@@ -1,12 +1,15 @@
 // Local subtitle files provided by the user, not fetched from the video
-// sites. The convention inside the vocabulary-bucket repo is:
+// sites. Inside the vocabulary-bucket repo the layout stays human-organized
+// (uploader / title.srt — no ids in names), and a per-platform map.json ties
+// videos to files:
 //
-//   user/subtitles/<platform>/<uploader>/<video title>/<videoId>.srt
+//   user/subtitles/youtube/EnglishWithEvie/I'm moving to Canada.srt
+//   user/subtitles/youtube/map.json
+//     { "C4Acd_5itrA": "EnglishWithEvie/I'm moving to Canada.srt" }
 //
-// e.g. user/subtitles/youtube/EnglishWithEvie/I'm moving to Canada/C4Acd_5itrA.srt
-// for https://www.youtube.com/watch?v=C4Acd_5itrA. Lookup therefore only
-// needs (platform, videoId) from the page URL — uploader and title folders
-// are never matched by name, just scanned through.
+// Lookup only needs (platform, videoId): map.json gives the srt path
+// relative to the platform directory. As a fallback, files literally named
+// <videoId>.srt under the platform directory are found by scanning.
 
 import type { IterableDirectoryHandle } from './fsa';
 
@@ -172,10 +175,80 @@ export interface LocalSubtitleFile {
 
 const SUBTITLE_FILE_RE = /\.(srt|vtt)$/i;
 
-// Look for user/subtitles/<platform>/**/<videoId>.srt (or .vtt) inside the
-// vocabulary-bucket root the extension already has a handle for; also accepts
-// a bare subtitles/ directory at the root. Uploader/title folder names are
-// scanned, not parsed — only the file name must match the video id.
+// Normalize a map.json value into a path relative to the platform directory.
+// Written by hand, so it is liberally interpreted: backslashes become
+// slashes, and leading "/", "./", "user/subtitles/" and "<platform>/"
+// prefixes are all stripped.
+export function normalizeMappedPath(raw: string, platform: VideoPlatform): string {
+  let rel = raw
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\.?\//, '');
+  if (rel.startsWith('user/subtitles/')) rel = rel.slice('user/subtitles/'.length);
+  if (rel.startsWith(`${platform}/`)) rel = rel.slice(platform.length + 1);
+  return rel;
+}
+
+// Candidates tried in order for a mapped path; a map entry may omit the
+// extension entirely.
+export function subtitlePathCandidates(rel: string): string[] {
+  if (SUBTITLE_FILE_RE.test(rel)) return [rel];
+  return [rel, `${rel}.srt`, `${rel}.vtt`];
+}
+
+// Read user/subtitles/<platform>/map.json ({ videoId: srt path }) and return
+// the mapped path for the video, or null when the map is missing, unreadable
+// or has no entry (the filename scan takes over then).
+async function resolveMappedSubtitle(
+  platformDir: FileSystemDirectoryHandle,
+  platform: VideoPlatform,
+  videoId: string,
+): Promise<string | null> {
+  let map: unknown;
+  try {
+    const file = await platformDir.getFileHandle('map.json');
+    map = JSON.parse(await (await file.getFile()).text());
+  } catch {
+    return null;
+  }
+  if (!map || typeof map !== 'object') return null;
+  let value = (map as Record<string, unknown>)[videoId];
+  // Tolerate a list of paths (e.g. languages) by taking the first string.
+  if (Array.isArray(value)) value = value.find((item) => typeof item === 'string');
+  if (typeof value !== 'string' || !value.trim()) return null;
+  return normalizeMappedPath(value, platform);
+}
+
+// Read a file at a slash-separated path below dir (getFileHandle only takes
+// single segments, so traverse segment by segment).
+async function readTextBelow(
+  dir: FileSystemDirectoryHandle,
+  relPath: string,
+): Promise<string | null> {
+  for (const candidate of subtitlePathCandidates(relPath)) {
+    const segments = candidate.split('/').filter(Boolean);
+    const fileName = segments.pop();
+    if (!fileName) continue;
+    let cursor: FileSystemDirectoryHandle | null = dir;
+    for (const segment of segments) {
+      cursor = cursor ? await cursor.getDirectoryHandle(segment).catch(() => null) : null;
+    }
+    if (!cursor) continue;
+    try {
+      const handle = await cursor.getFileHandle(fileName);
+      return await (await handle.getFile()).text();
+    } catch {
+      // Try the next candidate (extension appended, etc.).
+    }
+  }
+  return null;
+}
+
+// Find the subtitle for a video inside the vocabulary-bucket root the
+// extension already has a handle for; also accepts a bare subtitles/
+// directory at the root. Preferred source is <platform>/map.json; failing
+// that, files named <videoId>.srt anywhere up to uploader/title depth are
+// found by scanning.
 export async function findLocalSubtitleFile(
   bucketDir: FileSystemDirectoryHandle,
   platform: VideoPlatform,
@@ -189,6 +262,11 @@ export async function findLocalSubtitleFile(
     if (!dir) continue;
     const platformDir = await dir.getDirectoryHandle(platform).catch(() => null);
     if (!platformDir) continue;
+    const mapped = await resolveMappedSubtitle(platformDir, platform, videoId);
+    if (mapped) {
+      const text = await readTextBelow(platformDir, mapped);
+      if (text != null) return { path: `${base}/${platform}/${mapped}`, text };
+    }
     const hit = await scanForSubtitleFile(platformDir, videoId, `${base}/${platform}`, 2);
     if (hit) return hit;
   }
