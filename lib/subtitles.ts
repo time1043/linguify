@@ -131,6 +131,12 @@ async function downloadTrack(baseUrl: string): Promise<SubtitleLine[]> {
   throw new Error('字幕内容为空');
 }
 
+// NOT a secret: YouTube's public InnerTube API key. It is embedded in every
+// youtube.com page source, used by the web player itself, and hardcoded by
+// every open-source YouTube tool (yt-dlp, youtube-transcript, NewPipe).
+// It grants access to YouTube's public metadata APIs only.
+const INNERTUBE_PUBLIC_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+
 // Fallback: the InnerTube player API (public key). The ANDROID client's
 // caption track URLs work cross-origin, unlike the WEB/scraped ones.
 async function fetchYoutubeInnertube(
