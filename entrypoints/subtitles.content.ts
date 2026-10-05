@@ -1,7 +1,7 @@
 // Subtitle playback controller for video pages. The side panel loads the
-// user's local subtitle file (vocabulary-bucket user/subtitles/...) and hands
-// the cues over; this script owns the <video> element: it tracks the current
-// line, enforces the AB loops and handles the study hotkeys.
+// user's local subtitle file (vocabulary-bucket _lib/subtitles/...) and
+// hands the cues over; this script owns the <video> element: it tracks the
+// current line, enforces the AB loops and handles the study hotkeys.
 //
 // Hotkeys (both here and in the side panel; they act on the line at the
 // current playback position, i.e. the highlighted one):

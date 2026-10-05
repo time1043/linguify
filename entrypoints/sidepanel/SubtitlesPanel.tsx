@@ -1,9 +1,10 @@
 // 字幕 tab. Subtitles come from files the user downloaded themselves, laid
-// out inside the vocabulary-bucket repo as
-// user/subtitles/<platform>/<uploader>/<title>/<videoId>.srt — this panel
-// resolves that file for the active tab's video and keeps the list in sync
-// with the page's <video> element (see entrypoints/subtitles.content.ts,
-// which owns playback and the hotkeys).
+// out inside the vocabulary-bucket repo under
+// _lib/subtitles/<platform>/<uploader>/<title>.srt, with a per-platform
+// map.json recording the videoId -> file mapping — this panel resolves that
+// file for the active tab's video and keeps the list in sync with the
+// page's <video> element (see entrypoints/subtitles.content.ts, which owns
+// playback and the hotkeys).
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -285,7 +286,7 @@ export default function SubtitlesPanel() {
         <div className="border-b border-zinc-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
           {(dirState === 'none' || loadError === 'NO_DIR') && (
             <div>
-              <div>尚未选择词库目录，字幕放在词库目录的 user/subtitles/ 下</div>
+              <div>尚未选择词库目录，字幕放在词库目录的 _lib/subtitles/ 下</div>
               <button
                 type="button"
                 onClick={() => void pick()}
@@ -311,9 +312,9 @@ export default function SubtitlesPanel() {
             <div>
               没有找到字幕文件，请按此结构放置，并在 map.json 里登记映射：
               <div className="mt-1 rounded bg-white/70 px-2 py-1 font-mono text-[10px] leading-relaxed">
-                user/subtitles/{platform}/&lt;上传者&gt;/&lt;标题&gt;.srt
+                _lib/subtitles/{platform}/&lt;上传者&gt;/&lt;标题&gt;.srt
                 <br />
-                user/subtitles/{platform}/map.json
+                _lib/subtitles/{platform}/map.json
               </div>
               <div className="mt-1 rounded bg-white/70 px-2 py-1 font-mono text-[10px] leading-relaxed">
                 {'{ "'}

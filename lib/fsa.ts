@@ -70,6 +70,19 @@ export async function requestBucketPermission(): Promise<PermissionState> {
   return dir.requestPermission({ mode: 'readwrite' });
 }
 
+// User-generated data (subtitles, monthly vocab, AI sessions) lives in _lib/
+// — renamed from user/ so it sorts away from data/ — and this resolves it.
+// Reads fall back to the old name so pre-rename repos keep working; with
+// create the _lib directory is made (null only if the FS refuses).
+export async function libDir(
+  dir: BucketDirHandle,
+  create = false,
+): Promise<FileSystemDirectoryHandle | null> {
+  const lib = await dir.getDirectoryHandle('_lib', { create }).catch(() => null);
+  if (lib || create) return lib;
+  return dir.getDirectoryHandle('user').catch(() => null);
+}
+
 async function* jsonFiles(
   dir: FileSystemDirectoryHandle,
   prefix = '',
@@ -77,7 +90,7 @@ async function* jsonFiles(
   for await (const entry of (dir as IterableDirectoryHandle).values()) {
     if (entry.kind === 'directory') {
       // User-generated data and repo noise are never vocab buckets.
-      if (['user', 'monthly', 'node_modules', '.git'].includes(entry.name)) continue;
+      if (['_lib', 'user', 'monthly', 'node_modules', '.git'].includes(entry.name)) continue;
       yield* jsonFiles(entry as FileSystemDirectoryHandle, `${prefix}${entry.name}/`);
     } else if (entry.name.endsWith('.json')) {
       yield { handle: entry as FileSystemFileHandle, path: `${prefix}${entry.name}` };
@@ -104,7 +117,7 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
   return buckets.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Append one word to user/vocab-monthly/YYYY-MM.json. The user/ directory
+// Append one word to _lib/vocab-monthly/YYYY-MM.json. The _lib/ directory
 // holds user-generated data, mirroring data/ for dictionary data.
 export async function appendMonthly(
   dir: BucketDirHandle,
@@ -112,8 +125,9 @@ export async function appendMonthly(
   today = new Date(),
 ): Promise<{ added: boolean; file: string }> {
   const ym = monthKey(today);
-  const userDir = await dir.getDirectoryHandle('user', { create: true });
-  const monthlyDir = await userDir.getDirectoryHandle('vocab-monthly', { create: true });
+  const lib = await libDir(dir, true);
+  if (!lib) throw new VocabAccessError('NO_PERMISSION');
+  const monthlyDir = await lib.getDirectoryHandle('vocab-monthly', { create: true });
   const file = await monthlyDir.getFileHandle(`${ym}.json`, { create: true });
 
   let doc: MonthlyDoc | null = null;
@@ -128,17 +142,15 @@ export async function appendMonthly(
     await writable.write(serializeMonthlyDoc(result.doc));
     await writable.close();
   }
-  return { added: result.added, file: `user/vocab-monthly/${ym}.json` };
+  return { added: result.added, file: `_lib/vocab-monthly/${ym}.json` };
 }
 
 // List the recorded monthly files (newest first) with their word counts.
 export async function listMonthly(
   dir: BucketDirHandle,
 ): Promise<{ name: string; count: number }[]> {
-  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
-  const monthlyDir = userDir
-    ? await userDir.getDirectoryHandle('vocab-monthly').catch(() => null)
-    : null;
+  const lib = await libDir(dir);
+  const monthlyDir = lib ? await lib.getDirectoryHandle('vocab-monthly').catch(() => null) : null;
   if (!monthlyDir) return [];
   const months: { name: string; count: number }[] = [];
   for await (const entry of (monthlyDir as IterableDirectoryHandle).values()) {
@@ -163,10 +175,8 @@ export async function listMonthly(
 // Read one monthly document by month key (e.g. "2026-09"); null when the
 // file does not exist yet.
 export async function readMonthly(dir: BucketDirHandle, month: string): Promise<MonthlyDoc | null> {
-  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
-  const monthlyDir = userDir
-    ? await userDir.getDirectoryHandle('vocab-monthly').catch(() => null)
-    : null;
+  const lib = await libDir(dir);
+  const monthlyDir = lib ? await lib.getDirectoryHandle('vocab-monthly').catch(() => null) : null;
   if (!monthlyDir) return null;
   try {
     const file = await monthlyDir.getFileHandle(`${month}.json`);
