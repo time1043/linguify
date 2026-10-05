@@ -5,10 +5,12 @@
 //
 // Hotkeys (both here and in the side panel; they act on the line at the
 // current playback position, i.e. the highlighted one):
-//   a  play the previous line        d  play the next line
-//   s  toggle single-line AB loop    z  mark loop point A (this line's start)
-//   x  mark loop point B — the loop plays through the END of this line, so
-//      x on the last wanted line includes it; on the A line itself this
+//   a  previous line / d next line — they never end a loop; inside an
+//      active loop they walk the loop's own lines only
+//   s  toggle single-line AB loop (s s also ends a range loop)
+//   z  mark loop point A (this line's start)
+//   x  mark loop point B — the loop is armed here but only kicks in once
+//      this line has played to its end; on the A line itself this
 //      degrades to a single-line loop
 //   space play/pause (panel only; the page leaves it to the site)
 //   Esc clear loop + marks
@@ -233,7 +235,9 @@ export default defineContentScript({
         }
         // B marks the END line: the loop plays through the end of the line x
         // was pressed on, so x on the last wanted line includes it. On the A
-        // line itself this degrades to a single-line loop.
+        // line itself this degrades to a single-line loop. The loop is only
+        // armed here — no seek — so the B line finishes playing first and
+        // the jump back to A happens when it ends.
         const endTime = cues[currentIdx]!.end;
         const lastIdx = currentIdx;
         const kind: SubtitlesLoopState['kind'] = currentIdx === pendingA.idx ? 'single' : 'range';
@@ -246,12 +250,11 @@ export default defineContentScript({
           lastIdx,
         };
         pendingA = null;
-        seekTo(loop.start);
         startLoopTicker();
         toast(
           kind === 'single'
-            ? `单句循环：第 ${loop.aIdx + 1} 句`
-            : `AB 循环：第 ${loop.aIdx + 1}–${loop.lastIdx + 1} 句`,
+            ? `单句循环：第 ${loop.aIdx + 1} 句，本句播完开始`
+            : `AB 循环：第 ${loop.aIdx + 1}–${loop.lastIdx + 1} 句，本句播完开始`,
         );
         broadcastState();
         return;
@@ -281,13 +284,14 @@ export default defineContentScript({
         broadcastState();
         return;
       }
-      // prev / next exits loop mode entirely — including a pending A mark —
-      // so navigation is never silently confined to an old loop range.
-      clearLoopState();
-      const target =
+      // prev / next never touch loop state — a running loop is only ended
+      // by s s (or Esc/取消). Inside an active loop they walk the loop's own
+      // lines, clamped at its edges.
+      const wanted =
         cmd === 'prev'
           ? Math.max(0, currentIdx <= 0 ? 0 : currentIdx - 1)
           : Math.min(cues.length - 1, currentIdx < 0 ? 0 : currentIdx + 1);
+      const target = loop ? Math.min(Math.max(wanted, loop.aIdx), loop.bIdx) : wanted;
       seekTo(cues[target]!.start);
       currentIdx = target;
       toast(`第 ${target + 1} 句`);

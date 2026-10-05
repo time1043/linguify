@@ -336,8 +336,8 @@ export default function SubtitlesPanel() {
             <>
               <span>
                 {loop.kind === 'single'
-                  ? `🔁 单句循环：第 ${loop.aIdx + 1} 句`
-                  : `🔁 AB 循环：第 ${loop.aIdx + 1} – ${loop.lastIdx + 1} 句`}
+                  ? `🔁 单句循环：第 ${loop.aIdx + 1} 句（a/d 换句，s s 退出）`
+                  : `🔁 AB 循环：第 ${loop.aIdx + 1} – ${loop.lastIdx + 1} 句（s s 退出）`}
               </span>
               <button
                 type="button"
