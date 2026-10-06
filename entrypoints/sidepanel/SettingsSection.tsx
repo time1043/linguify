@@ -93,7 +93,8 @@ export default function SettingsSection() {
             : status === 'error'
               ? errorMessage
               : '尚未读取'}
-        。选择 vocabulary-bucket 根目录（含 data/）；浏览器重启后提示未授权时点「重新授权」。
+        。选择 vocabulary-bucket 根目录（含
+        data/）；授权失效时点击面板任意位置即会恢复，弹窗中选「每次访问都允许」可一劳永逸。
       </p>
 
       <div className="mt-3 flex items-center gap-2">

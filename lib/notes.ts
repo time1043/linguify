@@ -31,6 +31,29 @@ export async function readNoteFile(
   return readTextBelow(bucketDir, notePath);
 }
 
+// YAML front matter is handled opaquely: notes written by external tooling
+// start with a --- block (title/video-link/cover/published...) and the
+// WYSIWYG editor must never parse, render or re-serialize it — it is kept as
+// raw text and re-joined on save, byte-for-byte.
+
+// Split a note file into its raw front matter (without the --- fences, null
+// when the file has none) and the body. Only a leading block counts, and the
+// first closing fence wins.
+export function splitNoteFrontMatter(raw: string): { front: string | null; body: string } {
+  const m = raw.match(/^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+  if (!m) return { front: null, body: raw };
+  return { front: m[1] ?? '', body: raw.slice(m[0].length) };
+}
+
+// Inverse of splitNoteFrontMatter. The fence and the body are always
+// separated by exactly one blank line (files written without one — or with
+// several — are normalized on the next save); files that already have it
+// round-trip byte-for-byte.
+export function joinNoteFile(front: string | null, body: string): string {
+  if (front == null) return body;
+  return `---\n${front}\n---\n\n${body.replace(/^\n+/, '')}`;
+}
+
 // Create every missing directory below the bucket root and write the note.
 export async function writeNoteFile(
   bucketDir: FileSystemDirectoryHandle,
@@ -121,4 +144,22 @@ export function linkNoteTimestamps(markdown: string, hrefFor: (seconds: number) 
     const seconds = parseTimestampSeconds(text);
     return seconds == null ? raw : `[${text}](${hrefFor(seconds)})`;
   });
+}
+
+// Milkdown serializes bullet lists with '*' (prosemirror-markdown's default,
+// not configurable); the house style is '-'. Only a leading list marker is
+// rewritten — `**bold**`, `\*` escapes and `1.` items never match, and the
+// leading indentation is preserved. Meant for Milkdown's serializer output,
+// which never emits `* * *` thematic breaks.
+export function normalizeListBullets(markdown: string): string {
+  return markdown.replace(/^([ \t]*)\*[ \t]/gm, '$1- ');
+}
+
+// Obsidian compatibility: Milkdown can preserve empty paragraphs as a
+// whole-line `<br />` html placeholder (only when its preserve-empty-line
+// plugin is active). Replace such lines with plain blank lines; hard breaks
+// themselves serialize as `\<newline>` which Obsidian renders natively.
+// Mid-text `<br />` is left alone — it never comes from the serializer.
+export function normalizeNoteMarkdown(markdown: string): string {
+  return normalizeListBullets(markdown).replace(/^[ \t]*<br\s*\/?>[ \t]*$/gim, '');
 }

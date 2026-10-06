@@ -12,7 +12,7 @@ interface MonthInfo {
 function describe(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   if (message === 'NO_DIR') return '未连接词库目录';
-  if (message === 'NO_PERMISSION') return '词库目录需要重新授权';
+  if (message === 'NO_PERMISSION') return '词库目录需要重新授权（点击面板任意位置即可恢复）';
   return message;
 }
 

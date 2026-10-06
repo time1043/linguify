@@ -22,7 +22,7 @@ const PENDING_MAX_AGE_MS = 10 * 60_000;
 function describeAiError(err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   if (message === 'NO_API_KEY') return '尚未配置 DeepSeek API Key';
-  if (message === 'NO_PERMISSION') return '词库目录需要重新授权';
+  if (message === 'NO_PERMISSION') return '词库目录需要重新授权（点击面板任意位置即可恢复）';
   return message;
 }
 
@@ -52,7 +52,8 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (message === 'NO_DIR') setSaveNote('未连接词库目录，会话未保存');
-      else if (message === 'NO_PERMISSION') setSaveNote('词库目录需要重新授权，会话未保存');
+      else if (message === 'NO_PERMISSION')
+        setSaveNote('词库目录需要重新授权，会话未保存（点击面板任意位置即可恢复）');
       else setSaveNote(`会话保存失败：${message}`);
     }
   }, []);

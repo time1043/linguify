@@ -60,7 +60,8 @@ export async function getBucketDir(): Promise<BucketDirHandle | null> {
 
 export async function getBucketPermission(): Promise<PermissionState | null> {
   const dir = await getBucketDir();
-  return dir ? dir.queryPermission({ mode: 'readwrite' }) : null;
+  if (!dir) return null;
+  return (await bucketDirAccessible(dir)) ? 'granted' : 'prompt';
 }
 
 // Needs a user gesture — call from the options page.
@@ -68,6 +69,22 @@ export async function requestBucketPermission(): Promise<PermissionState> {
   const dir = await getBucketDir();
   if (!dir) throw new VocabAccessError('NO_DIR');
   return dir.requestPermission({ mode: 'readwrite' });
+}
+
+// queryPermission() on a freshly restored panel document reports 'prompt'
+// even while the origin-level grant is still alive (the service worker keeps
+// reading the same directory fine), which used to force a pointless
+// re-authorize every time the panel reopened or a new video appeared. Only a
+// real directory access tells the truth: NotFoundError and repo-shape errors
+// still prove the handle is usable, and NotAllowedError is the one state
+// that genuinely needs regranting.
+export async function bucketDirAccessible(dir: BucketDirHandle): Promise<boolean> {
+  try {
+    await dir.getDirectoryHandle('_lib');
+    return true;
+  } catch (err) {
+    return !(err instanceof DOMException && err.name === 'NotAllowedError');
+  }
 }
 
 // User-generated data (subtitles, monthly vocab, AI sessions) lives in _lib/
