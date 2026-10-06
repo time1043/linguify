@@ -45,10 +45,13 @@ export function splitNoteFrontMatter(raw: string): { front: string | null; body:
   return { front: m[1] ?? '', body: raw.slice(m[0].length) };
 }
 
-// Inverse of splitNoteFrontMatter — round-trips the original file text.
+// Inverse of splitNoteFrontMatter. The fence and the body are always
+// separated by exactly one blank line (files written without one — or with
+// several — are normalized on the next save); files that already have it
+// round-trip byte-for-byte.
 export function joinNoteFile(front: string | null, body: string): string {
   if (front == null) return body;
-  return `---\n${front}\n---\n${body}`;
+  return `---\n${front}\n---\n\n${body.replace(/^\n+/, '')}`;
 }
 
 // Create every missing directory below the bucket root and write the note.
