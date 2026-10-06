@@ -180,11 +180,23 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [active, runCommand]);
 
-  // Follow playback: keep the current line visible.
+  // Follow playback: keep the current line centered in the list, like a
+  // lyrics view. Scrolling the container directly (instead of
+  // scrollIntoView) so ancestor scrollables never move.
+  const centerCurrentRow = useCallback((idx: number): void => {
+    const list = listRef.current;
+    if (!list) return;
+    const row = list.querySelector<HTMLElement>(`[data-idx="${idx}"]`);
+    if (!row) return;
+    const listRect = list.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const delta = rowRect.top + rowRect.height / 2 - (listRect.top + listRect.height / 2);
+    list.scrollTop += delta;
+  }, []);
+
   useEffect(() => {
-    const row = listRef.current?.querySelector<HTMLElement>(`[data-idx="${currentIdx}"]`);
-    row?.scrollIntoView({ block: 'nearest' });
-  }, [currentIdx, cues]);
+    centerCurrentRow(currentIdx);
+  }, [currentIdx, cues, centerCurrentRow]);
 
   const inLoopRange = useCallback(
     (idx: number): boolean => loop != null && idx >= loop.aIdx && idx <= loop.lastIdx,
@@ -319,6 +331,9 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
               data-idx={idx}
               onClick={(e) => {
                 seekTo(cue.start);
+                // Center even when this row is already current (the
+                // currentIdx effect won't re-fire for it).
+                centerCurrentRow(idx);
                 // Drop focus so Space can never re-activate this row.
                 e.currentTarget.blur();
               }}
