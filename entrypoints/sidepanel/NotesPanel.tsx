@@ -276,7 +276,9 @@ export default function NotesPanel({ active }: { active: boolean }) {
     };
     host.addEventListener('click', onClick, true);
     return () => host.removeEventListener('click', onClick, true);
-  }, [openTimestamp]);
+    // notePath is a dependency because the host div only exists once a note
+    // is loaded — binding at mount (no note yet) would silently no-op.
+  }, [openTimestamp, notePath]);
 
   const insertTimestamp = useCallback(async (): Promise<void> => {
     if (!video || !videoId || !platform) return;
