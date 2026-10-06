@@ -123,6 +123,9 @@ export default function App() {
   const [addError, setAddError] = useState('');
   const [pinHint, setPinHint] = useState('');
   const requestId = useRef(0);
+  // Marks any element inside the shadow-root UI, so outside-click dismissal
+  // can tell card interactions from page clicks.
+  const uiRef = useRef<HTMLSpanElement | null>(null);
 
   // Runs when the pin is activated — the selection alone never triggers
   // network work or speech.
@@ -166,14 +169,11 @@ export default function App() {
 
   const openCard = useCallback(() => {
     if (!state?.selection.word) return;
-    // Speak only when opening; re-entering an open pin stays silent.
-    if (!state.cardOpen) speakWord(state.selection.word);
+    // Already pinned — hovering the dot again must not re-speak or re-query.
+    if (state.cardOpen) return;
+    speakWord(state.selection.word);
     void runLookup(state.selection);
   }, [state, runLookup]);
-
-  const closeCard = useCallback(() => {
-    setState((prev) => (prev ? { ...prev, cardOpen: false } : prev));
-  }, []);
 
   // Sentence selections hand the sentence to the side panel. When the panel
   // is already open the storage watcher picks it up; when Chrome refuses the
@@ -242,38 +242,51 @@ export default function App() {
       if (event.key === 'Escape') dismiss();
     };
     const onScroll = () => dismiss();
+    // The opened card is pinned: it closes on a click outside the card UI,
+    // not when the pointer drifts off the dot. Events from inside the shadow
+    // tree retarget to the host element at window level, so comparing the
+    // target against the host separates card clicks from page clicks.
+    const onPointerDown = (event: PointerEvent) => {
+      const root = uiRef.current?.getRootNode();
+      const host = root instanceof ShadowRoot ? root.host : null;
+      if (host && event.target instanceof Node && host.contains(event.target)) return;
+      dismiss();
+    };
 
     document.addEventListener('selectionchange', onSelectionChange);
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('pointerdown', onPointerDown, { capture: true });
     return () => {
       clearTimeout(timer);
       document.removeEventListener('selectionchange', onSelectionChange);
       document.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('scroll', onScroll, { capture: true });
+      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
     };
   }, []);
 
   return state ? (
-    <WordPin
-      selection={state.selection}
-      tone={state.selection.kind}
-      hint={pinHint}
-      active={state.selection.kind === 'word' && state.cardOpen}
-      activateOnHover={state.selection.kind === 'word'}
-      onActivate={state.selection.kind === 'word' ? openCard : () => void openAiPanel()}
-      onDeactivate={closeCard}
-    >
-      <Card
+    <span ref={uiRef} className="contents">
+      <WordPin
         selection={state.selection}
-        status={state.status}
-        hit={state.hit}
-        errorText={state.errorText}
-        addState={addState}
-        addError={addError}
-        onAdd={() => void addWord()}
-        onSpeak={() => speakWord(state.selection.word ?? '')}
-      />
-    </WordPin>
+        tone={state.selection.kind}
+        hint={pinHint}
+        active={state.selection.kind === 'word' && state.cardOpen}
+        activateOnHover={state.selection.kind === 'word'}
+        onActivate={state.selection.kind === 'word' ? openCard : () => void openAiPanel()}
+      >
+        <Card
+          selection={state.selection}
+          status={state.status}
+          hit={state.hit}
+          errorText={state.errorText}
+          addState={addState}
+          addError={addError}
+          onAdd={() => void addWord()}
+          onSpeak={() => speakWord(state.selection.word ?? '')}
+        />
+      </WordPin>
+    </span>
   ) : null;
 }

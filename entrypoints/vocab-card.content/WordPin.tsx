@@ -13,7 +13,6 @@ interface WordPinProps {
   // is too large to pop open on an accidental hover).
   activateOnHover?: boolean;
   onActivate: () => void;
-  onDeactivate: () => void;
   children?: ReactNode;
 }
 
@@ -22,9 +21,9 @@ const PIN_GAP = 6;
 const CARD_WIDTH = 320;
 
 // A small floating dot anchored to the top-left corner of the selection.
-// The word card only opens while the pointer stays inside the pin: the card
-// is attached right below (or above) the dot with a pointer-transparent
-// padding bridge, so moving between dot and card never closes it.
+// Activating it opens the card pinned: the card stays until a click outside
+// it (handled in App), Escape, a scroll, or a new selection — never when the
+// pointer merely wanders off the dot.
 export default function WordPin({
   selection,
   tone,
@@ -32,7 +31,6 @@ export default function WordPin({
   active,
   activateOnHover = true,
   onActivate,
-  onDeactivate,
   children,
 }: WordPinProps) {
   const { rect } = selection;
@@ -52,7 +50,6 @@ export default function WordPin({
       // Keep the page selection (and therefore the pin) alive while the user
       // interacts with the dot or the card.
       onMouseDown={(e) => e.preventDefault()}
-      onMouseLeave={active ? onDeactivate : undefined}
     >
       <button
         type="button"
