@@ -1,13 +1,14 @@
 // 记笔记 tab. A note is a markdown file in the vocabulary-bucket repo that
 // mirrors the video's subtitle path: note/<platform>/<uploader>/<title>.md
-// (see lib/notes.ts). Editing runs in Milkdown (WYSIWYG, remark-based — the
-// same markdown dialect as the preview); 源码 falls back to a plain textarea
-// and 预览 renders with react-markdown. Saves are debounced and also flushed
-// when the video or tab changes. Timestamps — [mm:ss](https://youtu.be/…?t=n)
-// — are inserted from the video's current playhead: in the preview a single
-// click seeks, in the WYSIWYG editor Ctrl+click does (a plain click is left
-// to the editor for link editing). Manually typed [mm:ss] works too, see
-// linkNoteTimestamps.
+// (see lib/notes.ts). Files written by external tooling may carry YAML front
+// matter — it is split off on load, shown in a collapsible raw-text block
+// and re-joined verbatim on save; the editors (Milkdown WYSIWYG, textarea
+// 源码, react-markdown 预览) only ever see the body. Saves are debounced and
+// also flushed when the video or tab changes. Timestamps —
+// [mm:ss](https://youtu.be/…?t=n) — are inserted from the video's current
+// playhead: a single click on one seeks the video in place (in the editor
+// the mousedown is intercepted so the link tooltip never opens). Manually
+// typed [mm:ss] works too, see linkNoteTimestamps.
 
 import { Crepe } from '@milkdown/crepe';
 // Selective theme imports: the aggregated common/style.css would pull the
@@ -32,10 +33,12 @@ import remarkGfm from 'remark-gfm';
 
 import { getBucketDir } from '@/lib/fsa';
 import {
+  joinNoteFile,
   linkNoteTimestamps,
   notePathForSubtitlePath,
   parseTimestampLink,
   readNoteFile,
+  splitNoteFrontMatter,
   timestampUrl,
   writeNoteFile,
 } from '@/lib/notes';
@@ -61,7 +64,10 @@ export default function NotesPanel({ active }: { active: boolean }) {
   const [noMapping, setNoMapping] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // `content` is the note BODY — the YAML front matter lives separately and
+  // is never fed to the editors (see lib/notes.ts).
   const [content, setContent] = useState('');
+  const [frontMatter, setFrontMatter] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [mode, setMode] = useState<EditorMode>('wysiwyg');
 
@@ -73,12 +79,21 @@ export default function NotesPanel({ active }: { active: boolean }) {
   const editorMdRef = useRef('');
   const contentRef = useRef('');
   const savedContentRef = useRef('');
+  const frontRef = useRef<string | null>(null);
+  const savedFrontRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const notePathRef = useRef<string | null>(null);
   notePathRef.current = notePath;
 
   const videoId = video?.info.videoId;
   const platform = video?.info.platform;
+
+  const markDirty = useCallback((): void => {
+    const dirty =
+      contentRef.current !== savedContentRef.current || frontRef.current !== savedFrontRef.current;
+    dirtyRef.current = dirty;
+    setSaveState(dirty ? 'dirty' : 'idle');
+  }, []);
 
   const flush = useCallback(async (): Promise<void> => {
     if (!dirtyRef.current) return;
@@ -88,8 +103,9 @@ export default function NotesPanel({ active }: { active: boolean }) {
     if (!dir) return;
     setSaveState('saving');
     try {
-      await writeNoteFile(dir, path, contentRef.current);
+      await writeNoteFile(dir, path, joinNoteFile(frontRef.current, contentRef.current));
       savedContentRef.current = contentRef.current;
+      savedFrontRef.current = frontRef.current;
       dirtyRef.current = false;
       setSaveState('saved');
     } catch (err) {
@@ -111,6 +127,9 @@ export default function NotesPanel({ active }: { active: boolean }) {
     setContent('');
     contentRef.current = '';
     savedContentRef.current = '';
+    setFrontMatter(null);
+    frontRef.current = null;
+    savedFrontRef.current = null;
     dirtyRef.current = false;
     setSaveState('idle');
     void (async () => {
@@ -131,12 +150,15 @@ export default function NotesPanel({ active }: { active: boolean }) {
           if (!cancelled) setNoMapping(true);
           return;
         }
-        const text = await readNoteFile(dir, path);
+        const raw = await readNoteFile(dir, path);
         if (cancelled) return;
-        const initial = text ?? '';
-        setContent(initial);
-        contentRef.current = initial;
-        savedContentRef.current = initial;
+        const { front, body } = splitNoteFrontMatter(raw ?? '');
+        setFrontMatter(front);
+        frontRef.current = front;
+        savedFrontRef.current = front;
+        setContent(body);
+        contentRef.current = body;
+        savedContentRef.current = body;
         dirtyRef.current = false;
         setSaveState('idle');
         setNotePath(path);
@@ -166,12 +188,25 @@ export default function NotesPanel({ active }: { active: boolean }) {
     void flush();
   }, [active, flush]);
 
-  const onContentChange = useCallback((value: string): void => {
-    contentRef.current = value;
-    dirtyRef.current = value !== savedContentRef.current;
-    setContent(value);
-    setSaveState(dirtyRef.current ? 'dirty' : 'idle');
-  }, []);
+  const onContentChange = useCallback(
+    (value: string): void => {
+      contentRef.current = value;
+      setContent(value);
+      markDirty();
+    },
+    [markDirty],
+  );
+
+  // Metadata is stored as opaque raw text; emptying it drops the block.
+  const onFrontMatterChange = useCallback(
+    (value: string): void => {
+      const next = value.trim() ? value : null;
+      frontRef.current = next;
+      setFrontMatter(next);
+      markDirty();
+    },
+    [markDirty],
+  );
 
   // Milkdown instance lives per note: created when the note is ready,
   // destroyed on the next note. The host div is always mounted so switching
@@ -460,6 +495,20 @@ export default function NotesPanel({ active }: { active: boolean }) {
               📝 {notePath}
             </div>
           </div>
+          {/* YAML front matter — opaque raw text, kept out of the editors and
+              re-joined verbatim on save */}
+          {frontMatter != null && (
+            <details className="border-b border-zinc-200 px-3 py-1 text-[10px] text-zinc-500">
+              <summary className="cursor-pointer select-none py-0.5">元数据 (front matter)</summary>
+              <textarea
+                value={frontMatter}
+                onChange={(e) => onFrontMatterChange(e.target.value)}
+                spellCheck={false}
+                rows={Math.min(10, frontMatter.split('\n').length + 1)}
+                className="mt-1 w-full resize-y rounded border border-zinc-200 bg-zinc-50 px-2 py-1 font-mono text-[10px] leading-relaxed text-zinc-700 outline-none focus:border-indigo-300"
+              />
+            </details>
+          )}
           <div className="flex items-center gap-1.5 border-b border-zinc-200 px-2 py-1.5">
             <button
               type="button"

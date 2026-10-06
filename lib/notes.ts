@@ -31,6 +31,26 @@ export async function readNoteFile(
   return readTextBelow(bucketDir, notePath);
 }
 
+// YAML front matter is handled opaquely: notes written by external tooling
+// start with a --- block (title/video-link/cover/published...) and the
+// WYSIWYG editor must never parse, render or re-serialize it — it is kept as
+// raw text and re-joined on save, byte-for-byte.
+
+// Split a note file into its raw front matter (without the --- fences, null
+// when the file has none) and the body. Only a leading block counts, and the
+// first closing fence wins.
+export function splitNoteFrontMatter(raw: string): { front: string | null; body: string } {
+  const m = raw.match(/^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+  if (!m) return { front: null, body: raw };
+  return { front: m[1] ?? '', body: raw.slice(m[0].length) };
+}
+
+// Inverse of splitNoteFrontMatter — round-trips the original file text.
+export function joinNoteFile(front: string | null, body: string): string {
+  if (front == null) return body;
+  return `---\n${front}\n---\n${body}`;
+}
+
 // Create every missing directory below the bucket root and write the note.
 export async function writeNoteFile(
   bucketDir: FileSystemDirectoryHandle,
