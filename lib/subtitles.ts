@@ -76,6 +76,17 @@ export interface SubtitlesCommandMessage {
 export interface SubtitlesRequestInfoMessage {
   type: 'subtitlesRequestInfo';
 }
+// The content script answers with { videoId, time, currentIdx } (or null)
+// so the notes panel can stamp the exact playhead position.
+export interface SubtitlesGetTimeMessage {
+  type: 'subtitlesGetTime';
+  videoId: string;
+}
+export interface SubtitlesTimeResponse {
+  videoId: string;
+  time: number;
+  currentIdx: number;
+}
 
 // --- content script -> side panel (broadcast via runtime.sendMessage) ---
 export interface SubtitlesVideoMessage {
@@ -275,7 +286,7 @@ async function resolveMappedSubtitle(
 
 // Read a file at a slash-separated path below dir (getFileHandle only takes
 // single segments, so traverse segment by segment).
-async function readTextBelow(
+export async function readTextBelow(
   dir: FileSystemDirectoryHandle,
   relPath: string,
 ): Promise<string | null> {
@@ -298,17 +309,14 @@ async function readTextBelow(
   return null;
 }
 
-// Find the subtitle for a video inside the vocabulary-bucket root the
-// extension already has a handle for. _lib/subtitles/<platform>/ is the
-// canonical location (user/subtitles/ is the pre-rename fallback, a bare
-// subtitles/ the last resort). Preferred source is <platform>/map.json;
-// failing that, files named <videoId>.srt anywhere up to uploader/title
-// depth are found by scanning.
-export async function findLocalSubtitleFile(
+// Resolve the subtitle file's path (relative to the bucket root) without
+// reading it — notes are derived from the path even when the srt file does
+// not exist yet. Same bases and map/scan strategy as findLocalSubtitleFile.
+export async function resolveLocalSubtitlePath(
   bucketDir: FileSystemDirectoryHandle,
   platform: VideoPlatform,
   videoId: string,
-): Promise<LocalSubtitleFile | null> {
+): Promise<string | null> {
   for (const base of ['_lib/subtitles', 'user/subtitles', 'subtitles']) {
     let dir: FileSystemDirectoryHandle | null = bucketDir;
     for (const part of base.split('/')) {
@@ -318,28 +326,40 @@ export async function findLocalSubtitleFile(
     const platformDir = await dir.getDirectoryHandle(platform).catch(() => null);
     if (!platformDir) continue;
     const mapped = await resolveMappedSubtitle(platformDir, platform, videoId);
-    if (mapped) {
-      const text = await readTextBelow(platformDir, mapped);
-      if (text != null) return { path: `${base}/${platform}/${mapped}`, text };
-    }
-    const hit = await scanForSubtitleFile(platformDir, videoId, `${base}/${platform}`, 2);
-    if (hit) return hit;
+    if (mapped) return `${base}/${platform}/${mapped}`;
+    const scanned = await scanForSubtitleFile(platformDir, videoId, `${base}/${platform}`, 2);
+    if (scanned) return scanned;
   }
   return null;
 }
 
+// Find (and read) the subtitle for a video inside the vocabulary-bucket root
+// the extension already has a handle for.
+export async function findLocalSubtitleFile(
+  bucketDir: FileSystemDirectoryHandle,
+  platform: VideoPlatform,
+  videoId: string,
+): Promise<LocalSubtitleFile | null> {
+  const path = await resolveLocalSubtitlePath(bucketDir, platform, videoId);
+  if (!path) return null;
+  const text = await readTextBelow(bucketDir, path);
+  return text == null ? null : { path, text };
+}
+
+// Walk a directory subtree looking for a file literally named
+// <videoId>.srt/.vtt; returns its path below the subtree root without
+// reading the file.
 async function scanForSubtitleFile(
   dir: FileSystemDirectoryHandle,
   videoId: string,
   prefix: string,
   depth: number,
-): Promise<LocalSubtitleFile | null> {
+): Promise<string | null> {
   for await (const entry of (dir as IterableDirectoryHandle).values()) {
     if (entry.kind === 'file') {
       if (!SUBTITLE_FILE_RE.test(entry.name)) continue;
       if (entry.name.replace(SUBTITLE_FILE_RE, '') !== videoId) continue;
-      const text = await (await (entry as FileSystemFileHandle).getFile()).text();
-      return { path: `${prefix}/${entry.name}`, text };
+      return `${prefix}/${entry.name}`;
     } else if (depth > 0) {
       const hit = await scanForSubtitleFile(
         entry as FileSystemDirectoryHandle,

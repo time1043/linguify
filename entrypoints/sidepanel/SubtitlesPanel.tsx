@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getBucketDir, pickBucketDir, requestBucketPermission } from '@/lib/fsa';
+import { getBucketDir } from '@/lib/fsa';
 import {
   findLocalSubtitleFile,
   formatSubtitleTime,
@@ -16,68 +16,30 @@ import {
   type SubtitleCue,
   type SubtitleCommand,
   type SubtitlesLoopState,
-  type SubtitlesVideoInfo,
 } from '@/lib/subtitles';
 
-type Sender = { tab?: { id?: number } | null };
+import { useActiveVideo, type MessageSender } from './use-active-video';
+import { useBucketDir } from './use-bucket-dir';
 
 // Codes the panel itself maps to guidance; anything else is shown verbatim.
 type LoadError = 'NO_DIR' | 'NO_PERMISSION' | 'NOT_FOUND' | 'EMPTY' | string;
 
-interface PanelVideo {
-  info: SubtitlesVideoInfo;
-  tabId: number;
-}
-
 export default function SubtitlesPanel() {
-  const [activeTabId, setActiveTabId] = useState<number | null>(null);
-  const [video, setVideo] = useState<PanelVideo | null>(null);
-  const [connectionLost, setConnectionLost] = useState(false);
+  const { activeTabId, video, connectionLost, sendToTab } = useActiveVideo();
+  const { dirState, pick, regrant, tick } = useBucketDir();
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [subtitlePath, setSubtitlePath] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
   const [loading, setLoading] = useState(false);
-  // Directory state is re-read after picking / regranting (dirTick bumps it).
-  const [dirState, setDirState] = useState<'none' | 'prompt' | 'ok' | null>(null);
-  const [dirTick, setDirTick] = useState(0);
   const [currentIdx, setCurrentIdx] = useState(-1);
   const [playing, setPlaying] = useState(false);
   const [pendingAIdx, setPendingAIdx] = useState<number | null>(null);
   const [loop, setLoop] = useState<SubtitlesLoopState | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
-  const activeTabIdRef = useRef<number | null>(null);
-  activeTabIdRef.current = activeTabId;
 
-  // Track the active tab — the panel always mirrors whichever tab is in front.
+  // Switching tabs drops the previous video's list state; the hook asks the
+  // new tab's content script to announce itself.
   useEffect(() => {
-    const query = (): void => {
-      void browser.tabs
-        .query({ active: true, currentWindow: true })
-        .then(([tab]) => setActiveTabId(tab?.id ?? null))
-        .catch(() => setActiveTabId(null));
-    };
-    query();
-    const onActivated = (): void => query();
-    browser.tabs.onActivated.addListener(onActivated);
-    return () => browser.tabs.onActivated.removeListener(onActivated);
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      const dir = await getBucketDir().catch(() => null);
-      if (!dir) {
-        setDirState('none');
-        return;
-      }
-      setDirState((await dir.queryPermission({ mode: 'read' })) === 'granted' ? 'ok' : 'prompt');
-    })();
-  }, [dirTick]);
-
-  // Switching tabs resets everything; the content script on the new tab is
-  // asked to (re)announce itself. No answer means it is not a video page.
-  useEffect(() => {
-    setVideo(null);
-    setConnectionLost(false);
     setCues([]);
     setSubtitlePath(null);
     setLoadError(null);
@@ -85,21 +47,17 @@ export default function SubtitlesPanel() {
     setLoop(null);
     setPendingAIdx(null);
     setPlaying(false);
-    if (activeTabId == null) return;
-    void browser.tabs
-      .sendMessage(activeTabId, { type: 'subtitlesRequestInfo' })
-      .catch(() => setConnectionLost(true));
   }, [activeTabId]);
 
-  // Broadcasts from the content scripts, filtered to the active tab.
+  // Playback state broadcasts from the content script, filtered to the
+  // active tab (video announcements are handled by useActiveVideo).
   useEffect(() => {
-    const onMessage = (message: unknown, sender: Sender): undefined => {
+    const onMessage = (message: unknown, sender: MessageSender): undefined => {
       const tabId = sender.tab?.id;
-      if (tabId == null || tabId !== activeTabIdRef.current) return;
+      if (tabId == null || tabId !== activeTabId) return;
       const msg = message as
         | {
             type?: string;
-            video?: SubtitlesVideoInfo | null;
             videoId?: string;
             currentIdx?: number;
             playing?: boolean;
@@ -107,10 +65,7 @@ export default function SubtitlesPanel() {
             loop?: SubtitlesLoopState | null;
           }
         | undefined;
-      if (msg?.type === 'subtitlesVideo') {
-        setConnectionLost(false);
-        setVideo(msg.video ? { info: msg.video, tabId } : null);
-      } else if (msg?.type === 'subtitlesState') {
+      if (msg?.type === 'subtitlesState') {
         setCurrentIdx(msg.currentIdx ?? -1);
         setPlaying(msg.playing ?? false);
         setPendingAIdx(msg.pendingAIdx ?? null);
@@ -120,13 +75,7 @@ export default function SubtitlesPanel() {
     };
     browser.runtime.onMessage.addListener(onMessage);
     return () => browser.runtime.onMessage.removeListener(onMessage);
-  }, []);
-
-  const sendToTab = useCallback(async (message: Record<string, unknown>): Promise<void> => {
-    const tabId = activeTabIdRef.current;
-    if (tabId == null) throw new Error('活动标签页未知');
-    await browser.tabs.sendMessage(tabId, message);
-  }, []);
+  }, [activeTabId]);
 
   // Load (or reload) the subtitle file whenever the video changes.
   const videoId = video?.info.videoId;
@@ -172,7 +121,7 @@ export default function SubtitlesPanel() {
     return () => {
       cancelled = true;
     };
-  }, [video, videoId, platform, dirTick, sendToTab]);
+  }, [video, videoId, platform, tick, sendToTab]);
 
   const runCommand = useCallback(
     (cmd: SubtitleCommand): void => {
@@ -233,18 +182,6 @@ export default function SubtitlesPanel() {
     const row = listRef.current?.querySelector<HTMLElement>(`[data-idx="${currentIdx}"]`);
     row?.scrollIntoView({ block: 'nearest' });
   }, [currentIdx, cues]);
-
-  const pick = useCallback(async () => {
-    await pickBucketDir();
-    setDirState('ok');
-    setDirTick((tick) => tick + 1);
-  }, []);
-
-  const regrant = useCallback(async () => {
-    await requestBucketPermission();
-    setDirState('ok');
-    setDirTick((tick) => tick + 1);
-  }, []);
 
   const inLoopRange = useCallback(
     (idx: number): boolean => loop != null && idx >= loop.aIdx && idx <= loop.lastIdx,

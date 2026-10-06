@@ -25,6 +25,7 @@ import {
   type SubtitleCue,
   type SubtitleCommand,
   type SubtitlesLoopState,
+  type SubtitlesTimeResponse,
   type SubtitlesVideoInfo,
 } from '@/lib/subtitles';
 
@@ -313,6 +314,18 @@ export default defineContentScript({
       if (msg?.type === 'subtitlesRequestInfo') {
         broadcastInfo();
         return;
+      }
+      if (msg?.type === 'subtitlesGetTime') {
+        // Notes stamps the playhead at button press; the polyfill needs a
+        // promise return for the response to reach tabs.sendMessage.
+        if (!meta || !video || (msg.videoId != null && msg.videoId !== meta.videoId)) {
+          return Promise.resolve(null);
+        }
+        return Promise.resolve({
+          videoId: meta.videoId,
+          time: video.currentTime,
+          currentIdx,
+        } satisfies SubtitlesTimeResponse);
       }
       if (msg?.type === 'subtitlesSetCues') {
         // The panel may be a beat behind a navigation; never apply another
