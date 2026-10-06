@@ -8,7 +8,7 @@
 
 // The .ts extension keeps this module importable by plain `node` (type
 // stripping) for testing the pure helpers; tsconfig allows it.
-import { readTextBelow } from './subtitles.ts';
+import { readTextBelow, type VideoPlatform } from './subtitles.ts';
 
 const NOTE_BASE = 'note';
 
@@ -60,15 +60,65 @@ export function parseTimestampSeconds(text: string): number | null {
   return parseInt(m[1] ?? '0', 10) * 3600 + parseInt(m[2] ?? '0', 10) * 60 + parseInt(m[3], 10);
 }
 
-// A timestamp in the note is rendered as [mm:ss](#ts=<seconds>) so the
-// markdown preview can make it a click-to-seek link.
+// Timestamps are stored as the platform's own shareable seek URL, so notes
+// stay usable outside the extension too:
+//   youtube   https://youtu.be/<id>?t=<seconds>
+//   bilibili  https://www.bilibili.com/video/<id>?t=<seconds>
+export function timestampUrl(platform: VideoPlatform, videoId: string, seconds: number): string {
+  const t = Math.max(0, Math.floor(seconds));
+  return platform === 'youtube'
+    ? `https://youtu.be/${videoId}?t=${t}`
+    : `https://www.bilibili.com/video/${videoId}?t=${t}`;
+}
+
+// Accepts YouTube's plain-seconds and 1h2m3s spellings for t/start.
+function parseTimeParam(raw: string): number | null {
+  if (/^\d+$/.test(raw)) return parseInt(raw, 10);
+  const m = raw.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+  if (!m) return null;
+  const seconds =
+    parseInt(m[1] ?? '0', 10) * 3600 + parseInt(m[2] ?? '0', 10) * 60 + parseInt(m[3] ?? '0', 10);
+  return seconds > 0 ? seconds : null;
+}
+
+// Extract (videoId, seconds) from a platform timestamp URL; null when the
+// link is not one (the preview then treats it as a normal external link).
+export function parseTimestampLink(href: string): { videoId: string; seconds: number } | null {
+  let url: URL;
+  try {
+    url = new URL(href);
+  } catch {
+    return null;
+  }
+  let videoId: string | null = null;
+  let raw: string | null = null;
+  const host = url.hostname.replace(/^www\./, '');
+  if (host === 'youtu.be' || host.endsWith('youtube.com')) {
+    videoId =
+      host === 'youtu.be'
+        ? (url.pathname.split('/')[1] ?? null)
+        : (url.searchParams.get('v') ??
+          url.pathname.match(/\/(?:shorts|live)\/([\w-]{11})/)?.[1] ??
+          null);
+    raw = url.searchParams.get('t') ?? url.searchParams.get('start');
+  } else if (host.endsWith('bilibili.com')) {
+    videoId = url.pathname.match(/\/video\/(BV[0-9A-Za-z]+)/)?.[1] ?? null;
+    raw = url.searchParams.get('t');
+  }
+  if (!videoId || raw == null) return null;
+  const seconds = parseTimeParam(raw);
+  return seconds == null ? null : { videoId, seconds };
+}
+
+// A bare timestamp in the note ([mm:ss]) is linkified to the canonical URL
+// form so the markdown preview can make it a click-to-seek link.
 const BARE_TIMESTAMP_RE = /\[(\d{1,2}:[0-5]?\d(?::[0-5]?\d)?)\](?!\()/g;
 
 // Make manually typed [mm:ss] timestamps clickable too: bare occurrences
 // become the canonical link form (existing [..](..) links are left alone).
-export function linkNoteTimestamps(markdown: string): string {
+export function linkNoteTimestamps(markdown: string, hrefFor: (seconds: number) => string): string {
   return markdown.replace(BARE_TIMESTAMP_RE, (raw, text: string) => {
     const seconds = parseTimestampSeconds(text);
-    return seconds == null ? raw : `[${text}](#ts=${seconds})`;
+    return seconds == null ? raw : `[${text}](${hrefFor(seconds)})`;
   });
 }

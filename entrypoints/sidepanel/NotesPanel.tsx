@@ -14,7 +14,9 @@ import { getBucketDir } from '@/lib/fsa';
 import {
   linkNoteTimestamps,
   notePathForSubtitlePath,
+  parseTimestampLink,
   readNoteFile,
+  timestampUrl,
   writeNoteFile,
 } from '@/lib/notes';
 import {
@@ -149,7 +151,7 @@ export default function NotesPanel() {
   );
 
   const insertTimestamp = useCallback(async (): Promise<void> => {
-    if (!video || !videoId) return;
+    if (!video || !videoId || !platform) return;
     let time = 0;
     try {
       const res = (await sendToTab({
@@ -160,7 +162,7 @@ export default function NotesPanel() {
     } catch {
       // No controller on the page — stamp 00:00 rather than failing.
     }
-    const stamp = `[${formatSubtitleTime(time)}](#ts=${Math.floor(time)})`;
+    const stamp = `[${formatSubtitleTime(time)}](${timestampUrl(platform, videoId, time)})`;
     const editor = editorRef.current;
     if (editor && mode !== 'preview') {
       const start = editor.selectionStart ?? contentRef.current.length;
@@ -176,9 +178,37 @@ export default function NotesPanel() {
       const glue = base && !base.endsWith('\n') ? '\n' : '';
       onContentChange(base + glue + stamp);
     }
-  }, [video, videoId, sendToTab, mode, onContentChange]);
+  }, [video, videoId, platform, sendToTab, mode, onContentChange]);
 
-  const markdown = linkNoteTimestamps(content);
+  // Bare [mm:ss] stamps become the platform share URL when a video is known;
+  // without one they stay locally seekable fragments.
+  const markdown = linkNoteTimestamps(
+    content,
+    video && videoId && platform
+      ? (seconds) => timestampUrl(platform, videoId, seconds)
+      : (seconds) => `#ts=${seconds}`,
+  );
+
+  // Timestamp clicks never navigate: a link to the current video seeks it in
+  // place; anything else (another video / a plain URL) opens a new tab.
+  const openTimestamp = useCallback(
+    (href: string): void => {
+      if (href.startsWith('#ts=')) {
+        const seconds = Number(href.slice(4));
+        if (Number.isFinite(seconds)) seekTo(seconds);
+        return;
+      }
+      const parsed = parseTimestampLink(href);
+      if (parsed && video && parsed.videoId === video.info.videoId) {
+        seekTo(parsed.seconds);
+        return;
+      }
+      void browser.tabs
+        .create({ url: href })
+        .catch(() => window.open(href, '_blank', 'noreferrer'));
+    },
+    [video, seekTo],
+  );
 
   const preview = (
     <div className="md-body h-full overflow-y-auto px-3 py-2 text-xs leading-relaxed">
@@ -187,20 +217,18 @@ export default function NotesPanel() {
         components={{
           a: ({ href, children }) => {
             const target = href ?? '';
-            if (target.startsWith('#ts=')) {
-              const seconds = Number(target.slice(4));
-              if (Number.isFinite(seconds)) {
-                return (
-                  <button
-                    type="button"
-                    onClick={() => seekTo(seconds)}
-                    title="跳转到视频对应位置"
-                    className="md-ts-link"
-                  >
-                    {children}
-                  </button>
-                );
-              }
+            const isStamp = target.startsWith('#ts=') || parseTimestampLink(target) != null;
+            if (isStamp) {
+              return (
+                <button
+                  type="button"
+                  onClick={() => openTimestamp(target)}
+                  title="跳转到视频对应位置"
+                  className="md-ts-link"
+                >
+                  {children}
+                </button>
+              );
             }
             return (
               <a href={target} target="_blank" rel="noreferrer">
@@ -221,7 +249,9 @@ export default function NotesPanel() {
       value={content}
       onChange={(e) => onContentChange(e.target.value)}
       spellCheck={false}
-      placeholder={'记下这个视频的笔记…\n\n[03:25](#ts=205) 或点「插入时间戳」\n# 标题\n- 要点'}
+      placeholder={
+        '记下这个视频的笔记…\n\n[03:25](https://youtu.be/…?t=205) 或点「插入时间戳」\n# 标题\n- 要点'
+      }
       className="h-full w-full resize-none bg-white px-3 py-2 font-mono text-xs leading-relaxed text-zinc-800 outline-none"
     />
   );
@@ -373,7 +403,7 @@ export default function NotesPanel() {
             )}
           </div>
           <div className="border-t border-zinc-200 px-3 py-1 text-[10px] text-zinc-400">
-            时间戳如 [03:25](#ts=205)，预览里点击即可跳转视频
+            时间戳如 [03:25](https://youtu.be/…?t=205)，预览里点击就地跳转视频
           </div>
         </>
       )}
