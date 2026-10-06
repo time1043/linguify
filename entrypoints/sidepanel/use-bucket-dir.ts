@@ -6,7 +6,12 @@
 import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';
 
-import { getBucketDir, pickBucketDir, requestBucketPermission } from '@/lib/fsa';
+import {
+  bucketDirAccessible,
+  getBucketDir,
+  pickBucketDir,
+  requestBucketPermission,
+} from '@/lib/fsa';
 
 export type DirState = 'none' | 'prompt' | 'ok' | null;
 
@@ -33,7 +38,10 @@ export function useBucketDir() {
         setDirState('none');
         return;
       }
-      setDirState((await dir.queryPermission({ mode: 'read' })) === 'granted' ? 'ok' : 'prompt');
+      // Probed with a real read, not queryPermission() — see
+      // bucketDirAccessible: the query lies 'prompt' on freshly restored
+      // documents whose origin-level grant is still alive.
+      setDirState((await bucketDirAccessible(dir)) ? 'ok' : 'prompt');
     })();
   }, [tick, setDirState]);
 
@@ -63,12 +71,19 @@ export function useBucketDir() {
     return regrantInFlight;
   }, [setDirState, setTick]);
 
-  // Extension origins keep the directory grant in memory only, so every
-  // browser restart lands back in 'prompt' — and requestPermission needs a
-  // user gesture. Rather than making the user hunt for the 重新授权 button,
-  // the first click anywhere in the panel re-requests it. A gesture-less
-  // request just rejects without a dialog, so trying once up front is free
-  // and clears the banner by itself if the browser ever auto-grants.
+  // Panels discover mid-session permission loss on their own loads (probe or
+  // NotAllowedError); they report it here so the banner and the auto-restore
+  // below re-arm no matter which tab noticed.
+  const reportPrompt = useCallback((): void => {
+    setDirState('prompt');
+  }, [setDirState]);
+
+  // The directory grant does not outlive the panel document, so restoring it
+  // needs a user gesture — but instead of making the user hunt for the
+  // 重新授权 button, try gesture-less first (requestPermission resolves
+  // silently when the browser still considers the grant alive, and merely
+  // rejects without a dialog otherwise), then re-request from the first
+  // click anywhere in the panel.
   useEffect(() => {
     if (dirState !== 'prompt' || autoRegrantBlocked) return;
     void regrant().catch(() => undefined);
@@ -79,5 +94,5 @@ export function useBucketDir() {
     return () => window.removeEventListener('pointerdown', onGesture, { capture: true });
   }, [dirState, regrant]);
 
-  return { dirState, pick, regrant, tick };
+  return { dirState, pick, regrant, reportPrompt, tick };
 }

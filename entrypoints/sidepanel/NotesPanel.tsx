@@ -31,7 +31,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import { getBucketDir } from '@/lib/fsa';
+import { bucketDirAccessible, getBucketDir } from '@/lib/fsa';
 import {
   joinNoteFile,
   linkNoteTimestamps,
@@ -60,7 +60,7 @@ const AUTOSAVE_DELAY_MS = 800;
 
 export default function NotesPanel({ active }: { active: boolean }) {
   const { video, connectionLost, sendToTab } = useActiveVideo();
-  const { dirState, pick, regrant, tick } = useBucketDir();
+  const { dirState, pick, regrant, reportPrompt, tick } = useBucketDir();
 
   const [notePath, setNotePath] = useState<string | null>(null);
   const [noMapping, setNoMapping] = useState(false);
@@ -142,8 +142,12 @@ export default function NotesPanel({ active }: { active: boolean }) {
           setLoadError('NO_DIR');
           return;
         }
-        if ((await dir.queryPermission({ mode: 'read' })) !== 'granted') {
-          setLoadError('NO_PERMISSION');
+        if (!(await bucketDirAccessible(dir))) {
+          if (!cancelled) {
+            // Reported to the shared hook so the auto-restore re-arms.
+            reportPrompt();
+            setLoadError('NO_PERMISSION');
+          }
           return;
         }
         const srtPath = await resolveLocalSubtitlePath(dir, platform, videoId);

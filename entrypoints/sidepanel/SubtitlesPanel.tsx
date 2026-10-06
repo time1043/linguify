@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { getBucketDir } from '@/lib/fsa';
+import { bucketDirAccessible, getBucketDir } from '@/lib/fsa';
 import {
   findLocalSubtitleFile,
   formatSubtitleTime,
@@ -26,7 +26,7 @@ type LoadError = 'NO_DIR' | 'NO_PERMISSION' | 'NOT_FOUND' | 'EMPTY' | string;
 
 export default function SubtitlesPanel({ active }: { active: boolean }) {
   const { activeTabId, video, connectionLost, sendToTab } = useActiveVideo();
-  const { dirState, pick, regrant, tick } = useBucketDir();
+  const { dirState, pick, regrant, reportPrompt, tick } = useBucketDir();
   const [cues, setCues] = useState<SubtitleCue[]>([]);
   const [subtitlePath, setSubtitlePath] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<LoadError | null>(null);
@@ -94,8 +94,12 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
           if (!cancelled) setLoadError('NO_DIR');
           return;
         }
-        if ((await dir.queryPermission({ mode: 'read' })) !== 'granted') {
-          if (!cancelled) setLoadError('NO_PERMISSION');
+        if (!(await bucketDirAccessible(dir))) {
+          if (!cancelled) {
+            // Reported to the shared hook so the auto-restore re-arms.
+            reportPrompt();
+            setLoadError('NO_PERMISSION');
+          }
           return;
         }
         const file = await findLocalSubtitleFile(dir, platform, videoId);
