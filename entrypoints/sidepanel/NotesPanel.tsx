@@ -461,7 +461,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
             </div>
           ) : (
             <div>
-              <div>数据目录需要重新授权</div>
+              <div>数据目录需要重新授权（点击面板任意位置即可恢复）</div>
               <button
                 type="button"
                 onClick={() => void regrant()}

@@ -250,7 +250,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
           )}
           {(dirState === 'prompt' || loadError === 'NO_PERMISSION') && (
             <div>
-              <div>词库目录需要重新授权</div>
+              <div>词库目录需要重新授权（点击面板任意位置即可恢复）</div>
               <button
                 type="button"
                 onClick={() => void regrant()}
