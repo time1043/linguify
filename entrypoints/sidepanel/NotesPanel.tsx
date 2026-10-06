@@ -33,7 +33,7 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved';
 
 const AUTOSAVE_DELAY_MS = 800;
 
-export default function NotesPanel() {
+export default function NotesPanel({ active }: { active: boolean }) {
   const { video, connectionLost, sendToTab } = useActiveVideo();
   const { dirState, pick, regrant, tick } = useBucketDir();
 
@@ -132,6 +132,13 @@ export default function NotesPanel() {
     const timer = setTimeout(() => void flush(), AUTOSAVE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [content, flush]);
+
+  // The panel stays mounted across tab switches — flush when this tab loses
+  // the front so a note is never left unsaved on screen switch.
+  useEffect(() => {
+    if (active) return;
+    void flush();
+  }, [active, flush]);
 
   const onContentChange = useCallback((value: string): void => {
     contentRef.current = value;

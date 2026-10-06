@@ -24,7 +24,7 @@ import { useBucketDir } from './use-bucket-dir';
 // Codes the panel itself maps to guidance; anything else is shown verbatim.
 type LoadError = 'NO_DIR' | 'NO_PERMISSION' | 'NOT_FOUND' | 'EMPTY' | string;
 
-export default function SubtitlesPanel() {
+export default function SubtitlesPanel({ active }: { active: boolean }) {
   const { activeTabId, video, connectionLost, sendToTab } = useActiveVideo();
   const { dirState, pick, regrant, tick } = useBucketDir();
   const [cues, setCues] = useState<SubtitleCue[]>([]);
@@ -144,8 +144,11 @@ export default function SubtitlesPanel() {
   );
 
   // The same study hotkeys as on the page, so they work while the focus is
-  // in the panel (e.g. right after clicking a line).
+  // in the panel (e.g. right after clicking a line). Bound only while this
+  // tab is in front — all panels stay mounted, and two tabs both listening
+  // would double-handle every key.
   useEffect(() => {
+    if (!active) return;
     const keyCommands: Record<string, SubtitleCommand> = {
       a: 'prev',
       d: 'next',
@@ -175,7 +178,7 @@ export default function SubtitlesPanel() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [runCommand]);
+  }, [active, runCommand]);
 
   // Follow playback: keep the current line visible.
   useEffect(() => {

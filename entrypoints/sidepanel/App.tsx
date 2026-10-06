@@ -55,16 +55,21 @@ export default function App() {
         ))}
       </div>
 
+      {/* All tabs stay mounted (inactive ones hidden) so directory
+          permission state, drafts and scroll positions survive tab switches. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'chat' ? (
+        <div className={tab === 'chat' ? 'h-full' : 'hidden'}>
           <ChatPanel onPending={() => setTab('chat')} />
-        ) : tab === 'subs' ? (
-          <SubtitlesPanel />
-        ) : tab === 'notes' ? (
-          <NotesPanel />
-        ) : (
+        </div>
+        <div className={tab === 'vocab' ? 'h-full' : 'hidden'}>
           <VocabPanel />
-        )}
+        </div>
+        <div className={tab === 'subs' ? 'h-full' : 'hidden'}>
+          <SubtitlesPanel active={tab === 'subs'} />
+        </div>
+        <div className={tab === 'notes' ? 'h-full' : 'hidden'}>
+          <NotesPanel active={tab === 'notes'} />
+        </div>
       </div>
     </div>
   );
