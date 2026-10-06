@@ -76,3 +76,18 @@ body,
   padding: 2px 6px;
   border: 1px solid rgb(0 0 0 / 0.1);
 }
+
+/* Click-to-seek video timestamps in the notes preview */
+.md-ts-link {
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgb(99 102 241 / 0.12);
+  color: rgb(67 56 202);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  cursor: pointer;
+}
+.md-ts-link:hover {
+  background: rgb(99 102 241 / 0.25);
+  text-decoration: underline;
+}

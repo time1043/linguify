@@ -1,10 +1,12 @@
 import { useState } from 'react';
 
 import ChatPanel from './ChatPanel';
+import NotesPanel from './NotesPanel';
 import SettingsSection from './SettingsSection';
+import SubtitlesPanel from './SubtitlesPanel';
 import VocabPanel from './VocabPanel';
 
-type Tab = 'chat' | 'vocab';
+type Tab = 'chat' | 'vocab' | 'subs' | 'notes';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
@@ -34,6 +36,8 @@ export default function App() {
           [
             ['chat', '句子对话'],
             ['vocab', '生词本'],
+            ['subs', '字幕'],
+            ['notes', '记笔记'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -51,8 +55,21 @@ export default function App() {
         ))}
       </div>
 
+      {/* All tabs stay mounted (inactive ones hidden) so directory
+          permission state, drafts and scroll positions survive tab switches. */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {tab === 'chat' ? <ChatPanel onPending={() => setTab('chat')} /> : <VocabPanel />}
+        <div className={tab === 'chat' ? 'h-full' : 'hidden'}>
+          <ChatPanel onPending={() => setTab('chat')} />
+        </div>
+        <div className={tab === 'vocab' ? 'h-full' : 'hidden'}>
+          <VocabPanel />
+        </div>
+        <div className={tab === 'subs' ? 'h-full' : 'hidden'}>
+          <SubtitlesPanel active={tab === 'subs'} />
+        </div>
+        <div className={tab === 'notes' ? 'h-full' : 'hidden'}>
+          <NotesPanel active={tab === 'notes'} />
+        </div>
       </div>
     </div>
   );

@@ -1,9 +1,11 @@
 // AI analysis sessions: one conversation per sentence, persisted as
-// user/ai-sessions/<slug>-<key>.json in the vocabulary-bucket directory.
+// _lib/ai-sessions/<slug>-<key>.json in the vocabulary-bucket directory.
 // The session key is derived deterministically from the normalized sentence,
 // so re-selecting a previously analyzed sentence finds the same session.
 
 import type { BucketDirHandle, IterableDirectoryHandle } from './fsa';
+
+import { libDir } from './fsa';
 
 export interface SessionSource {
   sentence: string;
@@ -60,10 +62,10 @@ export async function loadSession(
   fileName: string,
 ): Promise<SessionDoc | null> {
   try {
-    const file = await dir
-      .getDirectoryHandle('user')
-      .then((user) => user.getDirectoryHandle('ai-sessions'))
-      .then((sessions) => sessions.getFileHandle(fileName));
+    const file = await libDir(dir)
+      .then((lib) => lib?.getDirectoryHandle('ai-sessions'))
+      .then((sessions) => sessions?.getFileHandle(fileName));
+    if (!file) return null;
     const doc = JSON.parse(await (await file.getFile()).text()) as SessionDoc;
     return doc.version === 1 && Array.isArray(doc.messages) ? doc : null;
   } catch {
@@ -73,14 +75,15 @@ export async function loadSession(
 }
 
 export async function saveSession(dir: BucketDirHandle, doc: SessionDoc): Promise<string> {
-  const userDir = await dir.getDirectoryHandle('user', { create: true });
-  const sessionsDir = await userDir.getDirectoryHandle('ai-sessions', { create: true });
+  const lib = await libDir(dir, true);
+  if (!lib) throw new Error('NO_PERMISSION');
+  const sessionsDir = await lib.getDirectoryHandle('ai-sessions', { create: true });
   const fileName = await sessionFileName(doc.source.sentence);
   const file = await sessionsDir.getFileHandle(fileName, { create: true });
   const writable = await file.createWritable();
   await writable.write(`${JSON.stringify(doc, null, 2)}\n`);
   await writable.close();
-  return `user/ai-sessions/${fileName}`;
+  return `_lib/ai-sessions/${fileName}`;
 }
 
 // List every persisted session (newest first), including the full messages
@@ -89,10 +92,8 @@ export async function saveSession(dir: BucketDirHandle, doc: SessionDoc): Promis
 export async function listSessions(
   dir: BucketDirHandle,
 ): Promise<Array<SessionDoc & { fileName: string }>> {
-  const userDir = await dir.getDirectoryHandle('user').catch(() => null);
-  const sessionsDir = userDir
-    ? await userDir.getDirectoryHandle('ai-sessions').catch(() => null)
-    : null;
+  const lib = await libDir(dir);
+  const sessionsDir = lib ? await lib.getDirectoryHandle('ai-sessions').catch(() => null) : null;
   if (!sessionsDir) return [];
 
   const sessions: Array<SessionDoc & { fileName: string }> = [];

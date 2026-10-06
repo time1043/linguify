@@ -17,7 +17,7 @@ function describe(err: unknown): string {
 }
 
 // Tab 2: the monthly word list. Months are read from
-// user/vocab-monthly/YYYY-MM.json; picking a month shows its recorded words
+// _lib/vocab-monthly/YYYY-MM.json; picking a month shows its recorded words
 // with provenance and every collected example.
 export default function VocabPanel() {
   const [months, setMonths] = useState<MonthInfo[]>([]);
