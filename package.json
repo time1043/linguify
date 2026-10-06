@@ -18,6 +18,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.87.1",
+    "@milkdown/crepe": "^7.22.2",
+    "@milkdown/kit": "^7.22.2",
     "@tailwindcss/vite": "^4.3.3",
     "idb-keyval": "^6.3.0",
     "jotai": "^3.0.0",
