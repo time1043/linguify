@@ -15,17 +15,25 @@ File System Access API.
 - `entrypoints/vocab-card.content/` — selection pin: single words open the
   shadow-root lookup card (bucket, position, word, ipa, meaning, forms, TTS,
   one click adds to the monthly file); longer selections hand the sentence to
-  the side panel.
+  the side panel. The card stays pinned until a click outside it.
+- `entrypoints/subtitles.content.ts` — subtitles controller on video pages
+  (YouTube / Bilibili): owns playback commands, study hotkeys, single-line
+  and A–B looping, and broadcasts state to the side panel.
 - `entrypoints/sidepanel/` — the side panel, opened by clicking the toolbar
   icon. Top settings section (directory pick/re-grant, DeepSeek key/model)
-  and two tabs: 对话 (AI sentence chat — one session per sentence, follow-ups
-  supported, persisted under `user/ai-sessions/`) and 生词本 (monthly word
-  list with a month switcher over `user/vocab-monthly/`).
+  and four tabs: 对话 (AI sentence chat — one session per sentence, follow-ups
+  supported, persisted under `_lib/ai-sessions/`), 生词本 (monthly word list
+  with a month switcher over `_lib/vocab-monthly/`), 字幕 (subtitle list bound
+  to the video, click-to-seek, study hotkeys) and 记笔记 (markdown notes that
+  mirror the video's subtitle path).
 - `entrypoints/offscreen/` — windowed context for what the service worker
   cannot do: `createWritable()` file writes and the lazy-loaded pi-ai SDK.
 - `lib/vocab.ts` — pure lookup index (headwords + first token of each form).
 - `lib/monthly.ts` — pure monthly-file merge logic (dedupe, position, `from`
   provenance, `examples` accumulation).
+- `lib/subtitles.ts` — subtitle parsing, local subtitle resolution via
+  per-platform `map.json`, timestamp formatting.
+- `lib/notes.ts` — note identity (mirrors the subtitle path) and persistence.
 - `lib/sessions.ts` — AI session identity (sentence hash) and persistence.
 - `lib/ai.ts` — pi-ai integration (DeepSeek, analysis system prompt).
 - `lib/fsa.ts` — File System Access layer (directory pick, permission,
@@ -44,28 +52,39 @@ select `.output/chrome-mv3`.
 ## First run
 
 1. Click the extension icon — the side panel opens.
-2. Toggle 设置 at the top: 选择词库文件夹 → pick the vocabulary-bucket repo
-   root (the folder that contains `data/`; user-generated data is written to
-   `user/vocab-monthly/` and `user/ai-sessions/`), and paste your DeepSeek
-   API key.
+2. Toggle 设置 at the top: 选择词库文件夹 → pick the repo root to mount (the
+   folder that contains `data/`; user-generated data lives under `_lib/` —
+   `vocab-monthly/`, `ai-sessions/`, `subtitles/`, `notes/`; a legacy `user/`
+   is still read for old checkouts), and paste your DeepSeek API key.
 3. When the browser offers 「每次访问时允许」 in the permission prompt, choose
-   it so access survives restarts; otherwise use 重新授权 after a restart.
+   it so access survives restarts; otherwise a click anywhere in the panel
+   re-restores the grant.
 
 ## Usage
 
 1. Select a word on any page — a small dot appears at its top-left corner.
-   Hovering the dot speaks the word and opens the card with the bucket, its
-   position, the word, ipa, meaning and forms; unmatched words show 没查到.
-2. Click 加入月度 — the word is appended to `user/vocab-monthly/YYYY-MM.json`
+   Hovering the dot speaks the word and opens the pinned card with the
+   bucket, its position, the word, ipa, meaning and forms; unmatched words
+   show 没查到. The card stays until a click outside it, Esc, a scroll, or a
+   new selection.
+2. Click 加入月度 — the word is appended to `_lib/vocab-monthly/YYYY-MM.json`
    with `from` (dictionary provenance, e.g. `free-nmet/2050.json#970`, null
    when not found) and `examples: [{ sentence, url }]`. Meeting the same word
    again appends the new example; identical examples are skipped.
 3. Select a whole sentence (anything longer than a word) — a violet dot
    appears; clicking it sends the sentence to the side panel's 对话 tab,
    which analyzes it (【生词】/【结构】/【短语】) and answers follow-up
-   questions. One session per sentence, saved to `user/ai-sessions/`;
+   questions. One session per sentence, saved to `_lib/ai-sessions/`;
    re-selecting the same sentence resumes that session. Requires a DeepSeek
    API key.
+4. Open a supported video (YouTube / Bilibili) and open the 字幕 tab — the
+   panel loads the matching local subtitle file (resolved via
+   `_lib/subtitles/<platform>/…/map.json`), follows playback with the current
+   line centered, and supports click-to-seek, study hotkeys (a/d/s/z/x),
+   single-line and A–B looping.
+5. Open the 记笔记 tab on a video — it edits the note mirroring the video's
+   subtitle path (`note/<platform>/<uploader>/<title>.md`) with a WYSIWYG /
+   source / preview editor; timestamp links seek the video on click.
 
 ## Development
 

@@ -80,7 +80,7 @@ export function useBucketDir() {
 
   // The directory grant does not outlive the panel document, so restoring it
   // needs a user gesture — but instead of making the user hunt for the
-  // 重新授权 button, try gesture-less first (requestPermission resolves
+  // re-authorize button, try gesture-less first (requestPermission resolves
   // silently when the browser still considers the grant alive, and merely
   // rejects without a dialog otherwise), then re-request from the first
   // click anywhere in the panel.

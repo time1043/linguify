@@ -1,7 +1,7 @@
 import type { SentenceAnalysis } from '@/lib/ai';
 
 // Color scheme per grammatical role, roughly matching typical sentence-
-// diagramming colors: 主语 purple, 谓语 green, 状语 blue, ...
+// diagramming colors (subject purple, predicate green, adverbial blue, ...).
 const ROLE_STYLES: Record<string, { tag: string; chip: string }> = {
   主语: {
     tag: 'bg-violet-100 text-violet-700',

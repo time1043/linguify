@@ -1,4 +1,4 @@
-// 字幕 tab. Subtitles come from files the user downloaded themselves, laid
+// Subtitles tab. Subtitles come from files the user downloaded themselves, laid
 // out inside the vocabulary-bucket repo under
 // _lib/subtitles/<platform>/<uploader>/<title>.srt, with a per-platform
 // map.json recording the videoId -> file mapping — this panel resolves that

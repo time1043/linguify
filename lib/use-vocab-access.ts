@@ -1,5 +1,5 @@
-// Shared reactive access state for the popup and options pages, backed by
-// jotai atoms. Both pages render the same directory/permission/stats model.
+// Shared reactive access state for the settings section, backed by jotai
+// atoms. It renders the same directory/permission/stats model the panels use.
 
 import { atom, useAtom } from 'jotai';
 import { useCallback, useEffect } from 'react';

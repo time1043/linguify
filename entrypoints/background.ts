@@ -146,19 +146,7 @@ export default defineBackground(() => {
           aiApiKeyItem.getValue(),
           aiModelItem.getValue(),
         ]);
-        // Debug aid (temporary): the panel shows this in the error text, so
-        // the user can report what the background actually read — no devtools
-        // or terminal needed.
-        const storedKeys = Object.keys(await browser.storage.local.get(null)).join(', ');
-        const masked = apiKey
-          ? `${apiKey.slice(0, 6)}…${apiKey.slice(-4)} (len ${apiKey.length})`
-          : '(EMPTY)';
-        console.log(`[aiChat] key=${masked} model=${model} storage=[${storedKeys}]`);
-        if (!apiKey)
-          return {
-            ok: false,
-            error: `NO_API_KEY（后台读到 Key: ${masked}｜storage 现有键: ${storedKeys}｜处理实例: ${browser.runtime.id}）`,
-          };
+        if (!apiKey) return { ok: false, error: 'NO_API_KEY' };
         const result = await relayToOffscreen({
           type: 'aiChat',
           messages,

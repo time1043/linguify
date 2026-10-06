@@ -1,9 +1,9 @@
-// 记笔记 tab. A note is a markdown file in the vocabulary-bucket repo that
+// Notes tab. A note is a markdown file in the vocabulary-bucket repo that
 // mirrors the video's subtitle path: note/<platform>/<uploader>/<title>.md
 // (see lib/notes.ts). Files written by external tooling may carry YAML front
 // matter — it is split off on load, shown in a collapsible raw-text block
 // and re-joined verbatim on save; the editors (Milkdown WYSIWYG, textarea
-// 源码, react-markdown 预览) only ever see the body. Saves are debounced and
+// source, react-markdown preview) only ever see the body. Saves are debounced and
 // also flushed when the video or tab changes. Timestamps —
 // [mm:ss](https://youtu.be/…?t=n) — are inserted from the video's current
 // playhead: a single click on one seeks the video in place (in the editor
@@ -216,7 +216,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
 
   // Milkdown instance lives per note: created when the note is ready,
   // destroyed on the next note. The host div is always mounted so switching
-  // 编辑模式 never recreates the editor.
+  // edit modes never recreates the editor.
   useEffect(() => {
     if (!notePath || !milkdownHostRef.current) return;
     let disposed = false;
@@ -261,7 +261,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
     };
   }, [notePath, onContentChange]);
 
-  // Edits made in 源码 (or appended while in 预览) must reach the WYSIWYG
+  // Edits made in source mode (or appended while in preview) must reach the WYSIWYG
   // doc — push them in when that mode becomes visible again. The editor's
   // own emissions update editorMdRef first, so this only fires for external
   // changes and never loops.

@@ -286,7 +286,7 @@ export default defineContentScript({
         return;
       }
       // prev / next never touch loop state — a running loop is only ended
-      // by s s (or Esc/取消). Inside an active loop they walk the loop's own
+      // by s s (or Esc to cancel). Inside an active loop they walk the loop's own
       // lines, clamped at its edges.
       const wanted =
         cmd === 'prev'
