@@ -142,3 +142,12 @@ export function linkNoteTimestamps(markdown: string, hrefFor: (seconds: number) 
     return seconds == null ? raw : `[${text}](${hrefFor(seconds)})`;
   });
 }
+
+// Milkdown serializes bullet lists with '*' (prosemirror-markdown's default,
+// not configurable); the house style is '-'. Only a leading list marker is
+// rewritten — `**bold**`, `\*` escapes and `1.` items never match, and the
+// leading indentation is preserved. Meant for Milkdown's serializer output,
+// which never emits `* * *` thematic breaks.
+export function normalizeListBullets(markdown: string): string {
+  return markdown.replace(/^([ \t]*)\*[ \t]/gm, '$1- ');
+}

@@ -35,6 +35,7 @@ import { getBucketDir } from '@/lib/fsa';
 import {
   joinNoteFile,
   linkNoteTimestamps,
+  normalizeListBullets,
   notePathForSubtitlePath,
   parseTimestampLink,
   readNoteFile,
@@ -235,8 +236,10 @@ export default function NotesPanel({ active }: { active: boolean }) {
     crepe.on((listener) => {
       listener.markdownUpdated((_ctx, markdown) => {
         if (disposed) return;
-        editorMdRef.current = markdown;
-        onContentChange(markdown);
+        // Milkdown emits '*' bullets; the house style is '-'.
+        const normalized = normalizeListBullets(markdown);
+        editorMdRef.current = normalized;
+        onContentChange(normalized);
       });
     });
     void crepe
