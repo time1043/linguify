@@ -36,6 +36,7 @@ import {
   joinNoteFile,
   linkNoteTimestamps,
   normalizeListBullets,
+  normalizeNoteMarkdown,
   notePathForSubtitlePath,
   parseTimestampLink,
   readNoteFile,
@@ -237,7 +238,7 @@ export default function NotesPanel({ active }: { active: boolean }) {
       listener.markdownUpdated((_ctx, markdown) => {
         if (disposed) return;
         // Milkdown emits '*' bullets; the house style is '-'.
-        const normalized = normalizeListBullets(markdown);
+        const normalized = normalizeNoteMarkdown(markdown);
         editorMdRef.current = normalized;
         onContentChange(normalized);
       });

@@ -151,3 +151,12 @@ export function linkNoteTimestamps(markdown: string, hrefFor: (seconds: number) 
 export function normalizeListBullets(markdown: string): string {
   return markdown.replace(/^([ \t]*)\*[ \t]/gm, '$1- ');
 }
+
+// Obsidian compatibility: Milkdown can preserve empty paragraphs as a
+// whole-line `<br />` html placeholder (only when its preserve-empty-line
+// plugin is active). Replace such lines with plain blank lines; hard breaks
+// themselves serialize as `\<newline>` which Obsidian renders natively.
+// Mid-text `<br />` is left alone — it never comes from the serializer.
+export function normalizeNoteMarkdown(markdown: string): string {
+  return normalizeListBullets(markdown).replace(/^[ \t]*<br\s*\/?>[ \t]*$/gim, '');
+}
