@@ -8,7 +8,9 @@ export default defineContentScript({
   cssInjectionMode: 'ui',
   async main(ctx) {
     const ui = await createShadowRootUi(ctx, {
-      name: 'linguify',
+      // Custom element names must contain a hyphen — 'linguify' makes
+      // attachShadow throw and kills the whole content script.
+      name: 'linguify-card',
       position: 'inline',
       anchor: 'body',
       onMount: (container) => {
