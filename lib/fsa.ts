@@ -134,8 +134,37 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
   return buckets.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Append one word to _lib/vocab-monthly/YYYY-MM.json. The _lib/ directory
-// holds user-generated data, mirroring data/ for dictionary data.
+// Machine-generated "run" data (files the extension rewrites on its own)
+// lives under _lib/run/<name>/, renamed from _lib/<name>/ so the curated
+// subtree (subtitles, notes) stays apart. Writes always go to the new
+// location; the legacy directory is still read so existing checkouts keep
+// working. Null when neither is relevant (create=false and absent).
+async function runDataDir(
+  lib: FileSystemDirectoryHandle,
+  name: string,
+  create: boolean,
+): Promise<FileSystemDirectoryHandle | null> {
+  if (create) {
+    const run = await lib.getDirectoryHandle('run', { create: true });
+    return run.getDirectoryHandle(name, { create: true });
+  }
+  return lib
+    .getDirectoryHandle('run')
+    .then((run) => run.getDirectoryHandle(name))
+    .catch(() => null);
+}
+
+// The pre-rename location _lib/<name>/, still read for old checkouts.
+async function legacyDataDir(
+  lib: FileSystemDirectoryHandle,
+  name: string,
+): Promise<FileSystemDirectoryHandle | null> {
+  return lib.getDirectoryHandle(name).catch(() => null);
+}
+
+// Append one word to _lib/run/vocab-monthly/YYYY-MM.json. When the month
+// file only exists at the legacy location, its entries are absorbed so the
+// month never splits across two files.
 export async function appendMonthly(
   dir: BucketDirHandle,
   input: AddWordInput,
@@ -144,14 +173,22 @@ export async function appendMonthly(
   const ym = monthKey(today);
   const lib = await libDir(dir, true);
   if (!lib) throw new VocabAccessError('NO_PERMISSION');
-  const monthlyDir = await lib.getDirectoryHandle('vocab-monthly', { create: true });
+  const monthlyDir = await runDataDir(lib, 'vocab-monthly', true);
+  if (!monthlyDir) throw new VocabAccessError('NO_PERMISSION');
   const file = await monthlyDir.getFileHandle(`${ym}.json`, { create: true });
 
   let doc: MonthlyDoc | null = null;
   try {
     doc = JSON.parse(await (await file.getFile()).text()) as MonthlyDoc;
   } catch {
-    // First write — start a fresh document.
+    // Not written at the new location yet — absorb the legacy month file.
+    try {
+      const legacyDir = await legacyDataDir(lib, 'vocab-monthly');
+      const legacyFile = legacyDir ? await legacyDir.getFileHandle(`${ym}.json`) : null;
+      if (legacyFile) doc = JSON.parse(await (await legacyFile.getFile()).text()) as MonthlyDoc;
+    } catch {
+      // Truly the first write — start a fresh document.
+    }
   }
   const result = appendWord(doc, input, today);
   if (result.added) {
@@ -159,46 +196,63 @@ export async function appendMonthly(
     await writable.write(serializeMonthlyDoc(result.doc));
     await writable.close();
   }
-  return { added: result.added, file: `_lib/vocab-monthly/${ym}.json` };
+  return { added: result.added, file: `_lib/run/vocab-monthly/${ym}.json` };
 }
 
-// List the recorded monthly files (newest first) with their word counts.
+// List the recorded monthly files (newest first) with their word counts,
+// reading both the current and the legacy location (new location wins on a
+// month present in both).
 export async function listMonthly(
   dir: BucketDirHandle,
 ): Promise<{ name: string; count: number }[]> {
   const lib = await libDir(dir);
-  const monthlyDir = lib ? await lib.getDirectoryHandle('vocab-monthly').catch(() => null) : null;
-  if (!monthlyDir) return [];
-  const months: { name: string; count: number }[] = [];
-  for await (const entry of (monthlyDir as IterableDirectoryHandle).values()) {
-    if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
-    try {
-      const parsed = JSON.parse(
-        await (await (entry as FileSystemFileHandle).getFile()).text(),
-      ) as MonthlyDoc;
-      if (Array.isArray(parsed?.words)) {
-        months.push({
-          name: String(parsed.name ?? entry.name.replace(/\.json$/, '')),
-          count: parsed.words.length,
-        });
+  if (!lib) return [];
+  const monthlyDirs = [
+    await runDataDir(lib, 'vocab-monthly', false),
+    await legacyDataDir(lib, 'vocab-monthly'),
+  ];
+  const months = new Map<string, { name: string; count: number }>();
+  for (const monthlyDir of monthlyDirs) {
+    if (!monthlyDir) continue;
+    for await (const entry of (monthlyDir as IterableDirectoryHandle).values()) {
+      if (entry.kind !== 'file' || !entry.name.endsWith('.json')) continue;
+      const name = entry.name.replace(/\.json$/, '');
+      if (months.has(name)) continue;
+      try {
+        const parsed = JSON.parse(
+          await (await (entry as FileSystemFileHandle).getFile()).text(),
+        ) as MonthlyDoc;
+        if (Array.isArray(parsed?.words)) {
+          months.set(name, {
+            name: String(parsed.name ?? name),
+            count: parsed.words.length,
+          });
+        }
+      } catch {
+        // Skip malformed month files.
       }
-    } catch {
-      // Skip malformed month files.
     }
   }
-  return months.sort((a, b) => b.name.localeCompare(a.name));
+  return [...months.values()].sort((a, b) => b.name.localeCompare(a.name));
 }
 
 // Read one monthly document by month key (e.g. "2026-09"); null when the
-// file does not exist yet.
+// file does not exist at either location yet.
 export async function readMonthly(dir: BucketDirHandle, month: string): Promise<MonthlyDoc | null> {
   const lib = await libDir(dir);
-  const monthlyDir = lib ? await lib.getDirectoryHandle('vocab-monthly').catch(() => null) : null;
-  if (!monthlyDir) return null;
-  try {
-    const file = await monthlyDir.getFileHandle(`${month}.json`);
-    return JSON.parse(await (await file.getFile()).text()) as MonthlyDoc;
-  } catch {
-    return null;
+  if (!lib) return null;
+  const monthlyDirs = [
+    await runDataDir(lib, 'vocab-monthly', false),
+    await legacyDataDir(lib, 'vocab-monthly'),
+  ];
+  for (const monthlyDir of monthlyDirs) {
+    if (!monthlyDir) continue;
+    try {
+      const file = await monthlyDir.getFileHandle(`${month}.json`);
+      return JSON.parse(await (await file.getFile()).text()) as MonthlyDoc;
+    } catch {
+      // Try the next location.
+    }
   }
+  return null;
 }

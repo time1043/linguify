@@ -36,22 +36,24 @@ the File System Access API (no backend server):
   `data/<group>/<bucket>.json` → `{ name, words: [{ position, word, ipa,
 meaning, forms }] }`. Forms look like `"changed v."`; the lookup key is the
   first token.
-- `_lib/` — user-generated data, written by the extension (renamed from
-  `user/` so it sorts away from `data/`; a legacy `user/` is still read):
-  - `_lib/vocab-monthly/YYYY-MM.json` → `{ name, words: [{ position, word,
-from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
-    (`"<path-relative-to-data>#<position>"`, e.g. `free-nmet/2050.json#970`)
-    or `null`. Words are deduped case-insensitively; when a word already
-    exists its new example is appended to `examples` unless that exact
-    sentence+url is recorded already; position is max(existing) + 1. Legacy
-    entries with a single `example` field are migrated on the next append.
-  - `_lib/ai-sessions/<slug>-<hash>.json` → one AI conversation per sentence;
-    the hash is derived from the normalized sentence, so re-selecting the
-    same sentence resumes the same session.
+- `_lib/` — user-generated data (renamed from `user/` so it sorts away from
+  `data/`; a legacy `user/` is still read):
   - `_lib/subtitles/<platform>/<uploader>/` → user-provided `.srt` files plus
     a `map.json` mapping videoId → subtitle file.
   - `_lib/notes/<platform>/<uploader>/` → markdown notes mirroring the
     subtitle file names.
+  - `_lib/run/` — machine-generated data the extension rewrites itself
+    (renamed from flat `_lib/<name>/`; the legacy directories are still read
+    and writes always go to the new location): - `_lib/run/vocab-monthly/YYYY-MM.json` → `{ name, words: [{ position,
+word, from, examples: [{ sentence, url }] }] }`. `from` is dictionary
+    provenance (`"<path-relative-to-data>#<position>"`, e.g.
+    `free-nmet/2050.json#970`) or `null`. Words are deduped
+    case-insensitively; when a word already exists its new example is
+    appended to `examples` unless that exact sentence+url is recorded
+    already; position is max(existing) + 1. Legacy entries with a single
+    `example` field are migrated on the next append. - `_lib/run/ai-sessions/<slug>-<hash>.json` → one AI conversation per
+    sentence; the hash is derived from the normalized sentence, so
+    re-selecting the same sentence resumes the same session.
 - The bucket reader excludes `_lib/`, `monthly/`, `node_modules/`, `.git/`.
 
 ## Architecture notes
@@ -66,7 +68,8 @@ from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
   in chrome.storage and is picked up on the next icon click.
 - Side panel tabs: 对话 (AI chat, one session per sentence, pending-session
   handoff through chrome.storage + storage.watch), 生词本 (monthly word list,
-  month switcher over \_lib/vocab-monthly/YYYY-MM.json), 字幕 (subtitle list
+  month switcher over \_lib/run/vocab-monthly/YYYY-MM.json, cross-month
+  search), 字幕 (subtitle list
   synced to the video's playhead, click-to-seek, study hotkeys, A–B looping)
   and 记笔记 (markdown notes mirroring the subtitle path, WYSIWYG/source/
   preview). Panel-top settings cover the directory pick/re-grant and the
@@ -76,7 +79,7 @@ from, examples: [{ sentence, url }] }] }`. `from` is dictionary provenance
   https://api.deepseek.com/* is a host permission so extension-context
   fetches bypass CORS.
 - AI sessions: one conversation per sentence, identity = sha256 of the
-  normalized sentence, stored as \_lib/ai-sessions/<slug>-<hash>.json;
+  normalized sentence, stored as \_lib/run/ai-sessions/<slug>-<hash>.json;
   re-selecting a sentence resumes its session.
 - Bucket directory permissions: the grant lives in memory per browser
   session; the panel restores it gesture-less when possible, otherwise on

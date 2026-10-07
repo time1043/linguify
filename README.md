@@ -22,8 +22,9 @@ File System Access API.
 - `entrypoints/sidepanel/` — the side panel, opened by clicking the toolbar
   icon. Top settings section (directory pick/re-grant, DeepSeek key/model)
   and four tabs: 对话 (AI sentence chat — one session per sentence, follow-ups
-  supported, persisted under `_lib/ai-sessions/`), 生词本 (monthly word list
-  with a month switcher over `_lib/vocab-monthly/`), 字幕 (subtitle list bound
+  supported, persisted under `_lib/run/ai-sessions/`), 生词本 (monthly word
+  list with a month switcher and cross-month search over
+  `_lib/run/vocab-monthly/`), 字幕 (subtitle list bound
   to the video, click-to-seek, study hotkeys) and 记笔记 (markdown notes that
   mirror the video's subtitle path).
 - `entrypoints/offscreen/` — windowed context for what the service worker
@@ -54,8 +55,9 @@ select `.output/chrome-mv3`.
 1. Click the extension icon — the side panel opens.
 2. Toggle 设置 at the top: 选择词库文件夹 → pick the repo root to mount (the
    folder that contains `data/`; user-generated data lives under `_lib/` —
-   `vocab-monthly/`, `ai-sessions/`, `subtitles/`, `notes/`; a legacy `user/`
-   is still read for old checkouts), and paste your DeepSeek API key.
+   `subtitles/`, `notes/`, and machine-generated `run/vocab-monthly/`,
+   `run/ai-sessions/`; legacy `user/` and flat `_lib/<name>/` locations are
+   still read for old checkouts), and paste your DeepSeek API key.
 3. When the browser offers 「每次访问时允许」 in the permission prompt, choose
    it so access survives restarts; otherwise a click anywhere in the panel
    re-restores the grant.
@@ -67,14 +69,15 @@ select `.output/chrome-mv3`.
    bucket, its position, the word, ipa, meaning and forms; unmatched words
    show 没查到. The card stays until a click outside it, Esc, a scroll, or a
    new selection.
-2. Click 加入月度 — the word is appended to `_lib/vocab-monthly/YYYY-MM.json`
+2. Click 加入月度 — the word is appended to
+   `_lib/run/vocab-monthly/YYYY-MM.json`
    with `from` (dictionary provenance, e.g. `free-nmet/2050.json#970`, null
    when not found) and `examples: [{ sentence, url }]`. Meeting the same word
    again appends the new example; identical examples are skipped.
 3. Select a whole sentence (anything longer than a word) — a violet dot
    appears; clicking it sends the sentence to the side panel's 对话 tab,
    which analyzes it (【生词】/【结构】/【短语】) and answers follow-up
-   questions. One session per sentence, saved to `_lib/ai-sessions/`;
+   questions. One session per sentence, saved to `_lib/run/ai-sessions/`;
    re-selecting the same sentence resumes that session. Requires a DeepSeek
    API key.
 4. 搜索历史 in the 对话 tab filters past sessions by sentence or by any

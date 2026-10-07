@@ -36,7 +36,7 @@ function entryMatches(w: MonthlyEntry, q: string): boolean {
 }
 
 // Tab 2: the monthly word list. Months are read from
-// _lib/vocab-monthly/YYYY-MM.json; picking a month shows its recorded words
+// _lib/run/vocab-monthly/YYYY-MM.json; picking a month shows its recorded words
 // with provenance and every collected example. A query searches across ALL
 // months (word text and example sentences), loading the month files on
 // demand and caching them for the panel session.
