@@ -184,16 +184,51 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
     void refreshHistory();
   }, [refreshHistory]);
 
+  // Ask the conversation's source page to locate and highlight the original
+  // sentence; the outcome surfaces in the save-note line. runtime.sendMessage
+  // does not reach content scripts, so the request goes to every open tab:
+  // the tab whose URL matches answers, all others decline (their errors are
+  // expected and swallowed) — no tabs permission needed.
+  const highlightSource = useCallback(async (url: string, sentence: string) => {
+    if (!url) return;
+    try {
+      const tabs = (await browser.tabs.query({})) as { id?: number }[];
+      const results = await Promise.allSettled(
+        tabs
+          .filter((t) => t.id != null)
+          .map((t) =>
+            browser.tabs.sendMessage(t.id as number, {
+              type: 'highlightSentence',
+              sentence,
+              url,
+            }),
+          ),
+      );
+      const responses = results
+        .filter((r): r is PromiseFulfilledResult<{ ok?: boolean }> => r.status === 'fulfilled')
+        .map((r) => r.value);
+      if (responses.some((r) => r?.ok === true)) setSaveNote('已在页面中高亮原文');
+      else if (responses.some((r) => r != null))
+        setSaveNote('原文页面已打开，但未找到这句话（内容可能已变化）');
+      else setSaveNote('原文所在页面未打开');
+    } catch {
+      setSaveNote('原文所在页面未打开');
+    }
+  }, []);
+
   // Open a session straight from the history list — the list already carries
   // the full doc, so no extra round-trip is needed.
-  const openFromHistory = useCallback((item: SessionListItem) => {
-    docRef.current = item;
-    setMessages(item.messages);
-    setSessionSentence(item.source.sentence);
-    setStatus('ready');
-    setSaveNote(`已加载历史会话（${item.messages.length} 条消息）`);
-    setView('chat');
-  }, []);
+  const openFromHistory = useCallback(
+    (item: SessionListItem) => {
+      docRef.current = item;
+      setMessages(item.messages);
+      setSessionSentence(item.source.sentence);
+      setStatus('ready');
+      setView('chat');
+      void highlightSource(item.source.url, item.source.sentence);
+    },
+    [highlightSource],
+  );
 
   useEffect(() => {
     void (async () => {

@@ -10,6 +10,7 @@ import Card, {
   type SelectionContext,
   type SelectionKind,
 } from './Card';
+import { clearSentenceHighlight, highlightSentenceHere, samePage } from './highlight';
 import { speakWord, stopSpeaking } from './speech';
 import WordPin from './WordPin';
 
@@ -239,7 +240,10 @@ export default function App() {
       }, SELECTION_DEBOUNCE_MS);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') dismiss();
+      if (event.key === 'Escape') {
+        clearSentenceHighlight();
+        dismiss();
+      }
     };
     const onScroll = () => dismiss();
     // The opened card is pinned: it closes on a click outside the card UI,
@@ -252,17 +256,38 @@ export default function App() {
       if (host && event.target instanceof Node && host.contains(event.target)) return;
       dismiss();
     };
+    // The side panel asks this page to locate a conversation's original
+    // sentence; only the tab whose URL matches answers, every other listener
+    // declines so the panel can tell "page not open" apart from "found".
+    const onMessage = (
+      message: unknown,
+      _sender: unknown,
+      sendResponse: (response: { ok: boolean }) => void,
+    ): boolean => {
+      const msg = message as { type?: string; sentence?: string; url?: string } | undefined;
+      if (msg?.type !== 'highlightSentence' || !msg.sentence || !msg.url) return false;
+      if (!samePage(msg.url)) return false;
+      try {
+        const found = highlightSentenceHere(msg.sentence);
+        sendResponse({ ok: found });
+      } catch {
+        sendResponse({ ok: false });
+      }
+      return true;
+    };
 
     document.addEventListener('selectionchange', onSelectionChange);
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', onScroll, { capture: true, passive: true });
     window.addEventListener('pointerdown', onPointerDown, { capture: true });
+    browser.runtime.onMessage.addListener(onMessage);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('selectionchange', onSelectionChange);
       document.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('scroll', onScroll, { capture: true });
       window.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      browser.runtime.onMessage.removeListener(onMessage);
     };
   }, []);
 

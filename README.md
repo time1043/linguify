@@ -81,7 +81,8 @@ select `.output/chrome-mv3`.
    re-selecting the same sentence resumes that session. Requires a DeepSeek
    API key.
 4. 搜索历史 in the 对话 tab filters past sessions by sentence or by any
-   message content, showing a snippet around the hit.
+   message content, showing a snippet around the hit; opening a session
+   highlights its original sentence on the source page (when still open).
 5. Open a supported video (YouTube / Bilibili) and open the 字幕 tab — the
    panel loads the matching local subtitle file (resolved via
    `_lib/subtitles/<platform>/…/map.json`), follows playback with the current
