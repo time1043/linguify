@@ -373,6 +373,10 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
               type="button"
               data-idx={idx}
               onClick={(e) => {
+                // A drag-select inside the row also fires click — only seek
+                // on a plain click (collapsed selection).
+                const selection = window.getSelection();
+                if (selection && !selection.isCollapsed) return;
                 seekTo(cue.start);
                 // Center even when this row is already current (the
                 // currentIdx effect won't re-fire for it).

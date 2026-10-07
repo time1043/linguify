@@ -93,7 +93,9 @@ select `.output/chrome-mv3`.
    subtitle path (`note/<platform>/<uploader>/<title>.md`) with a WYSIWYG /
    source / preview editor; timestamp links seek the video on click.
 7. The 生词本 tab searches words and example sentences across all months,
-   not just the selected one.
+   not just the selected one. The same selection pins also work inside the
+   side panel itself (AI replies, notes, subtitle lines) — the violet pin
+   starts a chat session in place.
 
 ## Development
 

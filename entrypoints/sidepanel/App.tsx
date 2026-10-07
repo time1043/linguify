@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
+import { aiPendingSessionItem } from '@/lib/settings';
+
+import SelectionPin from '../../components/selection-pin/SelectionPin';
 import ChatPanel from './ChatPanel';
 import NotesPanel from './NotesPanel';
 import SettingsSection from './SettingsSection';
@@ -11,6 +14,15 @@ type Tab = 'chat' | 'vocab' | 'subs' | 'notes';
 export default function App() {
   const [tab, setTab] = useState<Tab>('chat');
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // The violet pin inside the panel hands the sentence straight to the chat
+  // tab through the same pending-session storage item the content script
+  // uses; the chat tab's storage watcher picks it up and starts the session.
+  const onSentenceForAI = useCallback(async (sentence: string, url: string): Promise<boolean> => {
+    await aiPendingSessionItem.setValue({ sentence, url, ts: Date.now() });
+    setTab('chat');
+    return true;
+  }, []);
 
   return (
     <div className="flex h-full flex-col bg-white font-sans text-sm text-zinc-800">
@@ -71,6 +83,11 @@ export default function App() {
           <NotesPanel active={tab === 'notes'} />
         </div>
       </div>
+
+      {/* Selection pins for panel-internal text (AI replies, notes, subtitle
+          lines): the violet pin starts a chat session, the word pin looks the
+          word up in the buckets. */}
+      <SelectionPin selectionUrl="" onSentenceForAI={onSentenceForAI} />
     </div>
   );
 }
