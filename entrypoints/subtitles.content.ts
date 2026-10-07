@@ -14,6 +14,7 @@
 //      degrades to a single-line loop
 //   space play/pause (panel only; the page leaves it to the site)
 //   j / l playback rate −0.1 / +0.1 (hold to keep stepping)
+//   k  playback rate back to 1x
 //   Esc clear loop + marks
 //
 // All state and side effects live inside main() — WXT evaluates the module
@@ -230,6 +231,14 @@ export default defineContentScript({
         broadcastState();
         return;
       }
+      if (cmd === 'resetRate') {
+        if (!video) return;
+        rate = 1;
+        video.playbackRate = rate;
+        toast('倍速 1.0x');
+        broadcastState();
+        return;
+      }
       if (cues.length === 0) {
         toast('字幕未加载');
         return;
@@ -394,6 +403,7 @@ export default defineContentScript({
       x: 'markB',
       j: 'rateDown',
       l: 'rateUp',
+      k: 'resetRate',
     };
 
     document.addEventListener(

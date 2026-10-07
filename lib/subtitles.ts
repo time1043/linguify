@@ -63,7 +63,8 @@ export type SubtitleCommand =
   | 'markB'
   | 'cancelLoop'
   | 'rateUp'
-  | 'rateDown';
+  | 'rateDown'
+  | 'resetRate';
 
 // --- side panel -> content script (via tabs.sendMessage) ---
 export interface SubtitlesSetCuesMessage {

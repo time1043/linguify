@@ -168,6 +168,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
       x: 'markB',
       j: 'rateDown',
       l: 'rateUp',
+      k: 'resetRate',
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -354,9 +355,9 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
       )}
 
       {/* hotkey legend */}
-      <div className="border-b border-zinc-200 px-3 py-1.5 text-[10px] text-zinc-400">
-        a 上一句 · d 下一句 · space 播放/暂停 · s 单句循环 · z 定A点 · x 定B点 · j/l 倍速±0.1 · Esc
-        取消
+      <div className="border-b border-zinc-200 px-3 py-1.5 text-[10px] leading-relaxed text-zinc-400">
+        a 上一句 · d 下一句 · space 播放/暂停 · s 单句循环 · z 定A点 · x 定B点 · j/l 倍速±0.1 · k
+        恢复1x · Esc 取消
       </div>
 
       {/* subtitle list */}
