@@ -87,6 +87,7 @@ select `.output/chrome-mv3`.
    panel loads the matching local subtitle file (resolved via
    `_lib/subtitles/<platform>/…/map.json`), follows playback with the current
    line centered, and supports click-to-seek, study hotkeys (a/d/s/z/x),
+   a playback-rate slider with j/l ±0.1 hotkeys,
    single-line and A–B looping.
 6. Open the 记笔记 tab on a video — it edits the note mirroring the video's
    subtitle path (`note/<platform>/<uploader>/<title>.md`) with a WYSIWYG /

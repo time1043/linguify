@@ -48,6 +48,12 @@ export interface SubtitlesLoopState {
   lastIdx: number;
 }
 
+// Playback-rate control: the slider and the j/l hotkeys move in RATE_STEP
+// increments, clamped to [MIN_RATE, MAX_RATE].
+export const MIN_RATE = 0.5;
+export const MAX_RATE = 2;
+export const RATE_STEP = 0.1;
+
 export type SubtitleCommand =
   | 'prev'
   | 'next'
@@ -55,7 +61,9 @@ export type SubtitleCommand =
   | 'toggleSingle'
   | 'markA'
   | 'markB'
-  | 'cancelLoop';
+  | 'cancelLoop'
+  | 'rateUp'
+  | 'rateDown';
 
 // --- side panel -> content script (via tabs.sendMessage) ---
 export interface SubtitlesSetCuesMessage {
@@ -72,6 +80,11 @@ export interface SubtitlesCommandMessage {
   type: 'subtitlesCommand';
   videoId: string;
   cmd: SubtitleCommand;
+}
+export interface SubtitlesSetRateMessage {
+  type: 'subtitlesSetRate';
+  videoId: string;
+  rate: number;
 }
 export interface SubtitlesRequestInfoMessage {
   type: 'subtitlesRequestInfo';

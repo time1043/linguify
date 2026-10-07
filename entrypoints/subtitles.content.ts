@@ -13,6 +13,7 @@
 //      this line has played to its end; on the A line itself this
 //      degrades to a single-line loop
 //   space play/pause (panel only; the page leaves it to the site)
+//   j / l playback rate −0.1 / +0.1 (hold to keep stepping)
 //   Esc clear loop + marks
 //
 // All state and side effects live inside main() — WXT evaluates the module
@@ -22,6 +23,9 @@
 import {
   detectPlatform,
   findCueIndexAtTime,
+  MAX_RATE,
+  MIN_RATE,
+  RATE_STEP,
   type SubtitleCue,
   type SubtitleCommand,
   type SubtitlesLoopState,
@@ -44,6 +48,8 @@ export default defineContentScript({
     let loop: SubtitlesLoopState | null = null;
     let video: HTMLVideoElement | null = null;
     let loopRaf = 0;
+    // Playback rate, owned here and mirrored to the panel via broadcasts.
+    let rate = 1;
 
     function currentMeta(): VideoMeta | null {
       const detected = detectPlatform(window.location.href);
@@ -76,6 +82,7 @@ export default defineContentScript({
           pendingAIdx: pendingA?.idx ?? null,
           loop,
           cueCount: cues.length,
+          rate,
         })
         .catch(() => undefined);
     }
@@ -115,6 +122,9 @@ export default defineContentScript({
         video.addEventListener('seeked', onSeeked);
         video.addEventListener('play', onPlayPause);
         video.addEventListener('pause', onPlayPause);
+        // A fresh element resets to 1x — re-apply the user's rate so it
+        // survives SPA navigations between videos.
+        if (rate !== 1) video.playbackRate = rate;
         recomputeCurrent();
         broadcastState();
       }
@@ -203,11 +213,20 @@ export default defineContentScript({
         broadcastState();
         return;
       }
-      // Play/pause must work without subtitles loaded too.
+      // Play/pause and rate must work without subtitles loaded too.
       if (cmd === 'togglePlay') {
         if (!video) return;
         if (video.paused) void video.play().catch(() => undefined);
         else video.pause();
+        broadcastState();
+        return;
+      }
+      if (cmd === 'rateUp' || cmd === 'rateDown') {
+        if (!video) return;
+        const step = cmd === 'rateUp' ? RATE_STEP : -RATE_STEP;
+        rate = Math.min(MAX_RATE, Math.max(MIN_RATE, Math.round((rate + step) * 10) / 10));
+        video.playbackRate = rate;
+        toast(`倍速 ${rate.toFixed(1)}x`);
         broadcastState();
         return;
       }
@@ -309,6 +328,7 @@ export default defineContentScript({
             cues?: SubtitleCue[];
             time?: number;
             cmd?: SubtitleCommand;
+            rate?: number;
           }
         | undefined;
       if (msg?.type === 'subtitlesRequestInfo') {
@@ -351,6 +371,13 @@ export default defineContentScript({
         broadcastState();
         return;
       }
+      if (msg?.type === 'subtitlesSetRate') {
+        if (!meta || msg.videoId !== meta.videoId || !video) return;
+        rate = Math.min(MAX_RATE, Math.max(MIN_RATE, Math.round((msg.rate ?? 1) * 10) / 10));
+        video.playbackRate = rate;
+        broadcastState();
+        return;
+      }
       if (msg?.type === 'subtitlesCommand') {
         if (meta && msg.videoId && msg.videoId !== meta.videoId) return;
         if (msg.cmd) runCommand(msg.cmd);
@@ -365,6 +392,8 @@ export default defineContentScript({
       s: 'toggleSingle',
       z: 'markA',
       x: 'markB',
+      j: 'rateDown',
+      l: 'rateUp',
     };
 
     document.addEventListener(
@@ -387,9 +416,10 @@ export default defineContentScript({
         }
         const cmd = keyCommands[e.key.toLowerCase()];
         if (!cmd) return;
-        // Holding a/d to walk through lines is useful; the marking keys must
-        // not auto-repeat.
-        if (e.repeat && cmd !== 'prev' && cmd !== 'next') return;
+        // Holding a/d to walk through lines and j/l to ramp the rate is
+        // useful; the marking keys must not auto-repeat.
+        if (e.repeat && cmd !== 'prev' && cmd !== 'next' && cmd !== 'rateUp' && cmd !== 'rateDown')
+          return;
         e.preventDefault();
         e.stopImmediatePropagation();
         runCommand(cmd);

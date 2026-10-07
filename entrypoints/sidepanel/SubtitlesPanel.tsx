@@ -12,7 +12,10 @@ import { bucketDirAccessible, getBucketDir } from '@/lib/fsa';
 import {
   findLocalSubtitleFile,
   formatSubtitleTime,
+  MAX_RATE,
+  MIN_RATE,
   parseSubtitleText,
+  RATE_STEP,
   type SubtitleCue,
   type SubtitleCommand,
   type SubtitlesLoopState,
@@ -35,6 +38,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
   const [playing, setPlaying] = useState(false);
   const [pendingAIdx, setPendingAIdx] = useState<number | null>(null);
   const [loop, setLoop] = useState<SubtitlesLoopState | null>(null);
+  const [rate, setRate] = useState(1);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   // Switching tabs drops the previous video's list state; the hook asks the
@@ -47,6 +51,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
     setLoop(null);
     setPendingAIdx(null);
     setPlaying(false);
+    setRate(1);
   }, [activeTabId]);
 
   // Playback state broadcasts from the content script, filtered to the
@@ -63,6 +68,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
             playing?: boolean;
             pendingAIdx?: number | null;
             loop?: SubtitlesLoopState | null;
+            rate?: number;
           }
         | undefined;
       if (msg?.type === 'subtitlesState') {
@@ -70,6 +76,7 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
         setPlaying(msg.playing ?? false);
         setPendingAIdx(msg.pendingAIdx ?? null);
         setLoop(msg.loop ?? null);
+        setRate(msg.rate ?? 1);
       }
       return undefined;
     };
@@ -159,6 +166,8 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
       s: 'toggleSingle',
       z: 'markA',
       x: 'markB',
+      j: 'rateDown',
+      l: 'rateUp',
     };
     const onKey = (e: KeyboardEvent): void => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -176,7 +185,10 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
       }
       const cmd = keyCommands[e.key.toLowerCase()];
       if (!cmd) return;
-      if (e.repeat && cmd !== 'prev' && cmd !== 'next') return;
+      // Holding a/d walks lines and j/l ramps the rate; marking keys must
+      // not auto-repeat.
+      if (e.repeat && cmd !== 'prev' && cmd !== 'next' && cmd !== 'rateUp' && cmd !== 'rateDown')
+        return;
       e.preventDefault();
       runCommand(cmd);
     };
@@ -226,6 +238,31 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
             </div>
             <div className="mt-1 truncate text-[11px] text-zinc-600" title={video.info.title}>
               {video.info.title}
+            </div>
+            {/* Playback rate: a notched slider (0.5–2.0, 0.1 steps); the
+                content script owns the value and broadcasts it back. */}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="w-9 shrink-0 text-right text-[11px] font-medium text-zinc-700">
+                {rate.toFixed(1)}x
+              </span>
+              <input
+                type="range"
+                min={MIN_RATE}
+                max={MAX_RATE}
+                step={RATE_STEP}
+                value={rate}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setRate(v);
+                  void sendToTab({
+                    type: 'subtitlesSetRate',
+                    videoId: video.info.videoId,
+                    rate: v,
+                  }).catch(() => undefined);
+                }}
+                className="min-w-0 flex-1 accent-indigo-600"
+                aria-label="播放倍速"
+              />
             </div>
           </>
         ) : (
@@ -318,7 +355,8 @@ export default function SubtitlesPanel({ active }: { active: boolean }) {
 
       {/* hotkey legend */}
       <div className="border-b border-zinc-200 px-3 py-1.5 text-[10px] text-zinc-400">
-        a 上一句 · d 下一句 · space 播放/暂停 · s 单句循环 · z 定A点 · x 定B点 · Esc 取消
+        a 上一句 · d 下一句 · space 播放/暂停 · s 单句循环 · z 定A点 · x 定B点 · j/l 倍速±0.1 · Esc
+        取消
       </div>
 
       {/* subtitle list */}
