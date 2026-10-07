@@ -9,6 +9,7 @@ import { callOffscreen } from '@/lib/relay';
 import { aiApiKeyItem, aiPendingSessionItem, type PendingAiSession } from '@/lib/settings';
 
 import AnalysisCard from './AnalysisCard';
+import HighlightedText from './HighlightedText';
 
 type Status = 'empty' | 'loading' | 'analyzing' | 'ready' | 'error';
 type View = 'chat' | 'history';
@@ -24,6 +25,22 @@ function describeAiError(err: unknown): string {
   if (message === 'NO_API_KEY') return '尚未配置 DeepSeek API Key';
   if (message === 'NO_PERMISSION') return '词库目录需要重新授权（点击面板任意位置即可恢复）';
   return message;
+}
+
+// Context around the first message-content hit, for results whose sentence
+// itself does not match — it explains why the session matched at all.
+function matchSnippet(s: SessionListItem, q: string): string | null {
+  for (const m of s.messages) {
+    const idx = m.content.toLowerCase().indexOf(q);
+    if (idx >= 0) {
+      const start = Math.max(0, idx - 30);
+      const end = Math.min(m.content.length, idx + q.length + 40);
+      return (
+        (start > 0 ? '…' : '') + m.content.slice(start, end) + (end < m.content.length ? '…' : '')
+      );
+    }
+  }
+  return null;
 }
 
 // Tab 1: the AI conversation. One session per sentence; a previously
@@ -268,24 +285,35 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
               {items && items.length > 0 ? '没有匹配的会话。' : '还没有会话历史。'}
             </p>
           )}
-          {filtered.map((s) => (
-            <button
-              key={s.fileName}
-              type="button"
-              onClick={() => openFromHistory(s)}
-              className="block w-full rounded-xl border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-indigo-300"
-            >
-              <p className="line-clamp-2 text-xs font-medium text-zinc-900">{s.source.sentence}</p>
-              {s.source.url && (
-                <span className="mt-1 block truncate text-[10px] text-indigo-500">
-                  {s.source.url}
-                </span>
-              )}
-              <p className="mt-1 text-[10px] text-zinc-400">
-                {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} 条消息
-              </p>
-            </button>
-          ))}
+          {filtered.map((s) => {
+            const sentenceHit = s.source.sentence.toLowerCase().includes(query_);
+            const snippet = sentenceHit ? null : matchSnippet(s, query_);
+            return (
+              <button
+                key={s.fileName}
+                type="button"
+                onClick={() => openFromHistory(s)}
+                className="block w-full rounded-xl border border-zinc-200 bg-white p-3 text-left transition-colors hover:border-indigo-300"
+              >
+                <p className="line-clamp-2 text-xs font-medium text-zinc-900">
+                  <HighlightedText text={s.source.sentence} query={query_} />
+                </p>
+                {snippet && (
+                  <p className="mt-1 line-clamp-2 text-[10px] leading-relaxed text-zinc-500">
+                    <HighlightedText text={snippet} query={query_} />
+                  </p>
+                )}
+                {s.source.url && (
+                  <span className="mt-1 block truncate text-[10px] text-indigo-500">
+                    {s.source.url}
+                  </span>
+                )}
+                <p className="mt-1 text-[10px] text-zinc-400">
+                  {new Date(s.updatedAt).toLocaleString()} · {s.messages.length} 条消息
+                </p>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -300,7 +328,7 @@ export default function ChatPanel({ onPending }: { onPending?: () => void }) {
           onClick={openHistory}
           className="ml-auto shrink-0 rounded-md border border-zinc-300 px-2 py-0.5 text-[10px] text-zinc-600 transition-colors hover:bg-zinc-50"
         >
-          历史
+          搜索历史
         </button>
       </div>
 

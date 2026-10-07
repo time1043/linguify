@@ -77,14 +77,18 @@ select `.output/chrome-mv3`.
    questions. One session per sentence, saved to `_lib/ai-sessions/`;
    re-selecting the same sentence resumes that session. Requires a DeepSeek
    API key.
-4. Open a supported video (YouTube / Bilibili) and open the 字幕 tab — the
+4. 搜索历史 in the 对话 tab filters past sessions by sentence or by any
+   message content, showing a snippet around the hit.
+5. Open a supported video (YouTube / Bilibili) and open the 字幕 tab — the
    panel loads the matching local subtitle file (resolved via
    `_lib/subtitles/<platform>/…/map.json`), follows playback with the current
    line centered, and supports click-to-seek, study hotkeys (a/d/s/z/x),
    single-line and A–B looping.
-5. Open the 记笔记 tab on a video — it edits the note mirroring the video's
+6. Open the 记笔记 tab on a video — it edits the note mirroring the video's
    subtitle path (`note/<platform>/<uploader>/<title>.md`) with a WYSIWYG /
    source / preview editor; timestamp links seek the video on click.
+7. The 生词本 tab searches words and example sentences across all months,
+   not just the selected one.
 
 ## Development
 
