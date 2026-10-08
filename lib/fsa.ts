@@ -4,7 +4,7 @@
 
 import { get, set } from 'idb-keyval';
 
-import type { Bucket } from './types';
+import type { Bucket, WordEntry } from './types';
 
 import {
   appendWord,
@@ -115,6 +115,34 @@ async function* jsonFiles(
   }
 }
 
+// Bucket files come in two shapes: the curated document
+// ({ name, words: [{ position, word, ipa, meaning, forms }] }) and the raw
+// upstream vocabulary-bucket arrays ([{ id, content, explain, other }]).
+// Normalize both into the internal Bucket shape; null for anything else.
+function normalizeBucket(doc: unknown, path: string): Bucket | null {
+  if (Array.isArray(doc)) {
+    const words: WordEntry[] = doc
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+      .filter((item) => typeof item.content === 'string')
+      .map((item, index) => ({
+        position: Number(item.id) || index + 1,
+        word: String(item.content),
+        ipa: '',
+        meaning: typeof item.explain === 'string' ? item.explain : '',
+        forms: String(item.other ?? '')
+          .split(',')
+          .map((form) => form.trim())
+          .filter(Boolean),
+      }));
+    return { path, name: path, words };
+  }
+  if (doc && Array.isArray((doc as { words?: unknown }).words)) {
+    const wrapped = doc as { name?: unknown; words: WordEntry[] };
+    return { path, name: String(wrapped.name ?? path), words: wrapped.words };
+  }
+  return null;
+}
+
 // Read every bucket file. Prefers the data/ subdirectory when present (the
 // recommended pick is the vocabulary-bucket repo root), otherwise scans the
 // chosen directory itself.
@@ -125,8 +153,8 @@ export async function readBuckets(dir: BucketDirHandle): Promise<Bucket[]> {
   for await (const { handle, path } of jsonFiles(root)) {
     try {
       const doc = JSON.parse(await (await handle.getFile()).text());
-      if (Array.isArray(doc?.words))
-        buckets.push({ path, name: String(doc.name ?? path), words: doc.words });
+      const bucket = normalizeBucket(doc, path);
+      if (bucket) buckets.push(bucket);
     } catch (err) {
       console.warn(`skip unreadable bucket ${path}:`, err);
     }
